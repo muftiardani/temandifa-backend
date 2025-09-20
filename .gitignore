@@ -1,0 +1,17 @@
+# dependencies
+node_modules/
+
+# File environment variables
+# .env
+
+# Folder lingkungan virtual Python
+.venv/
+
+# Folder sementara untuk file yang diunggah
+uploads/
+temp_uploads/
+temp_audio_uploads/
+
+# File cache dan log Python
+__pycache__/
+*.pyc
