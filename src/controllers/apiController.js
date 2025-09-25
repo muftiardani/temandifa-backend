@@ -1,125 +1,121 @@
-const fs = require("fs");
 const axios = require("axios");
 const FormData = require("form-data");
 const Tesseract = require("tesseract.js");
+const logger = require("../config/logger"); // Impor logger Winston
 
-const DETECT_API_URL = process.env.DETECT_API_URL;
-const TRANSCRIBE_API_URL = process.env.TRANSCRIBE_API_URL;
+// Ambil URL layanan dari environment variables dengan fallback ke localhost
+const DETECTOR_URL = process.env.DETECTOR_URL || "http://localhost:5001/detect";
+const TRANSCRIBER_URL =
+  process.env.TRANSCRIBER_URL || "http://localhost:5002/transcribe";
 
 /**
- * Menerima gambar, meneruskannya ke API Python YOLO untuk deteksi objek,
+ * Menerima file gambar, meneruskannya ke layanan deteksi objek Python,
  * dan mengembalikan hasilnya.
  */
-const detectObjects = async (req, res) => {
+exports.detectObject = async (req, res) => {
   if (!req.file) {
-    return res.status(400).json({ error: "Tidak ada file yang diunggah." });
+    logger.warn("Percobaan deteksi objek tanpa file.");
+    return res
+      .status(400)
+      .json({ error: "Tidak ada file gambar yang diunggah" });
   }
-
-  const imagePath = req.file.path;
 
   try {
     const formData = new FormData();
-    formData.append("image", fs.createReadStream(imagePath), {
-      filename: "image.jpg",
+    formData.append("image", req.file.buffer, {
+      filename: req.file.originalname,
+      contentType: req.file.mimetype,
     });
 
-    // Mengirim gambar ke layanan deteksi objek Python
-    const response = await axios.post(DETECT_API_URL, formData, {
-      headers: {
-        ...formData.getHeaders(),
-      },
+    logger.info(`Meneruskan permintaan deteksi objek ke: ${DETECTOR_URL}`);
+    const response = await axios.post(DETECTOR_URL, formData, {
+      headers: formData.getHeaders(),
     });
 
     res.json(response.data);
   } catch (error) {
-    console.error("Error saat berkomunikasi dengan API Python:", error.message);
-    res.status(500).json({
-      error: "Gagal berkomunikasi dengan layanan deteksi.",
-      details: error.response
-        ? error.response.data
-        : "Server Python tidak merespons.",
+    logger.error("Error saat berkomunikasi dengan layanan deteksi objek:", {
+      message: error.message,
+      stack: error.stack,
+      response: error.response ? error.response.data : "No response data",
     });
-  } finally {
-    fs.unlink(imagePath, (err) => {
-      if (err) console.error("Gagal menghapus file sementara:", err);
-    });
+    res
+      .status(500)
+      .json({ error: "Gagal memproses gambar untuk deteksi objek" });
   }
 };
 
 /**
- * Menerima gambar dan melakukan Optical Character Recognition (OCR)
- * untuk mengekstrak teks di dalamnya menggunakan Tesseract.js.
+ * Menerima file gambar, melakukan OCR menggunakan Tesseract.js,
+ * dan mengembalikan teks yang terdeteksi.
  */
-const scanImage = async (req, res) => {
+exports.scanImage = async (req, res) => {
   if (!req.file) {
-    return res.status(400).json({ error: "Tidak ada file yang diunggah." });
+    logger.warn("Percobaan pemindaian gambar tanpa file.");
+    return res
+      .status(400)
+      .json({ error: "Tidak ada file gambar yang diunggah" });
   }
 
-  const imagePath = req.file.path;
+  logger.info("Memulai proses OCR untuk gambar:", {
+    filename: req.file.originalname,
+  });
 
   try {
     const {
       data: { text },
-    } = await Tesseract.recognize(imagePath, "ind"); // Menggunakan model bahasa Indonesia
+    } = await Tesseract.recognize(
+      req.file.buffer,
+      "ind", // Menggunakan bahasa Indonesia
+      {
+        logger: (m) => logger.info(`Status Tesseract: ${JSON.stringify(m)}`),
+      }
+    );
 
+    logger.info("Proses OCR berhasil.");
     res.json({ scannedText: text });
   } catch (error) {
-    console.error("Error saat proses OCR:", error);
-    res
-      .status(500)
-      .json({ error: "Terjadi kesalahan di server saat memindai gambar." });
-  } finally {
-    fs.unlink(imagePath, (err) => {
-      if (err) console.error("Gagal menghapus file sementara (OCR):", err);
+    logger.error("Error saat melakukan OCR:", {
+      message: error.message,
+      stack: error.stack,
     });
+    res.status(500).json({ error: "Gagal memindai teks dari gambar" });
   }
 };
 
 /**
- * Menerima file audio dan meneruskannya ke API Python Whisper untuk transkripsi.
+ * Menerima file audio, meneruskannya ke layanan transkripsi Python,
+ * dan mengembalikan hasilnya.
  */
-const transcribeAudio = async (req, res) => {
+exports.transcribeAudio = async (req, res) => {
   if (!req.file) {
+    logger.warn("Percobaan transkripsi audio tanpa file.");
     return res
       .status(400)
-      .json({ error: "Tidak ada file audio yang diunggah." });
+      .json({ error: "Tidak ada file audio yang diunggah" });
   }
-
-  const audioPath = req.file.path;
-  console.log("Meneruskan audio ke API Python Whisper:", audioPath);
 
   try {
     const formData = new FormData();
-    formData.append("audio", fs.createReadStream(audioPath), {
-      filename: "recording.m4a",
+    formData.append("audio", req.file.buffer, {
+      filename: req.file.originalname,
+      contentType: req.file.mimetype,
     });
 
-    // Kirim permintaan ke server transkripsi
-    const response = await axios.post(TRANSCRIBE_API_URL, formData, {
-      headers: { ...formData.getHeaders() },
+    logger.info(
+      `Meneruskan permintaan transkripsi audio ke: ${TRANSCRIBER_URL}`
+    );
+    const response = await axios.post(TRANSCRIBER_URL, formData, {
+      headers: formData.getHeaders(),
     });
 
     res.json(response.data);
   } catch (error) {
-    console.error(
-      "Error saat berkomunikasi dengan API Transkripsi:",
-      error.message
-    );
-    res.status(500).json({
-      error: "Gagal berkomunikasi dengan layanan transkripsi.",
-      details: error.response
-        ? error.response.data
-        : "Server Python tidak merespons.",
+    logger.error("Error saat berkomunikasi dengan layanan transkripsi:", {
+      message: error.message,
+      stack: error.stack,
+      response: error.response ? error.response.data : "No response data",
     });
-  } finally {
-    fs.unlink(audioPath, (err) => {
-      if (err) console.error("Gagal menghapus file audio sementara:", err);
-    });
+    res.status(500).json({ error: "Gagal memproses audio untuk transkripsi" });
   }
-};
-
-module.exports = {
-  detectObjects,
-  scanImage,
-  transcribeAudio,
 };

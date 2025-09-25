@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - DETECTOR_URL=http://yolo-detector:5001/detect
+      - TRANSCRIBER_URL=http://voice-transcriber:5002/transcribe
+    depends_on:
+      - yolo-detector
+      - voice-transcriber
+    networks:
+      - temandifa-net
+
+  yolo-detector:
+    build:
+      context: .
+      dockerfile: yolo-detector/Dockerfile
+    ports:
+      - "5001:5001"
+    networks:
+      - temandifa-net
+
+  voice-transcriber:
+    build:
+      context: .
+      dockerfile: voice_transcriber/Dockerfile
+    ports:
+      - "5002:5002"
+    networks:
+      - temandifa-net
+
+networks:
+  temandifa-net:
+    driver: bridge

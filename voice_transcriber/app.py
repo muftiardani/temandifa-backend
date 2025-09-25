@@ -1,53 +1,51 @@
-import os
-import whisper
 from flask import Flask, request, jsonify
-from werkzeug.utils import secure_filename
-import traceback
+import whisper
+import os
+import logging
 
 app = Flask(__name__)
 
-UPLOAD_FOLDER = 'temp_audio_uploads'
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+# Konfigurasi logging
+logging.basicConfig(level=logging.INFO)
 
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+# Muat model sekali saat aplikasi dimulai
+try:
+    model = whisper.load_model("base")
+    logging.info("Model Whisper berhasil dimuat.")
+except Exception as e:
+    logging.error(f"Gagal memuat model Whisper: {e}")
+    model = None
 
-# Muat model Whisper saat server dimulai. 'base' adalah model yang cepat dan ringan.
-# Untuk akurasi lebih tinggi, bisa menggunakan 'small' atau 'medium'.
-print("Memuat model Whisper...")
-model = whisper.load_model("base")
-print("Model Whisper berhasil dimuat.")
-
-# Definisikan endpoint API untuk transkripsi
 @app.route('/transcribe', methods=['POST'])
-def transcribe_api():
+def transcribe_audio():
+    if model is None:
+        return jsonify({'error': 'Model tidak tersedia'}), 500
+
     if 'audio' not in request.files:
-        return jsonify({"error": "Tidak ada bagian file audio"}), 400
+        return jsonify({'error': 'File audio tidak ditemukan'}), 400
 
-    file = request.files['audio']
-    if file.filename == '':
-        return jsonify({"error": "Tidak ada file yang dipilih"}), 400
+    audio_file = request.files['audio']
+    
+    # Simpan file sementara untuk diproses
+    temp_path = "temp_audio_file"
+    audio_file.save(temp_path)
 
-    if file:
-        filename = secure_filename(file.filename)
-        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        
-        try:
-            file.save(temp_path)
-            
-            # Lakukan transkripsi menggunakan Whisper
-            result = model.transcribe(temp_path, language="id") # Set bahasa ke Indonesia
-            transcribed_text = result["text"]
-            
+    try:
+        result = model.transcribe(temp_path)
+        # Hapus file sementara setelah selesai
+        os.remove(temp_path)
+        return jsonify({'transcribedText': result['text']})
+    except Exception as e:
+        logging.error(f"Error saat transkripsi audio: {e}")
+        # Pastikan file sementara dihapus bahkan jika ada error
+        if os.path.exists(temp_path):
             os.remove(temp_path)
-            
-            return jsonify({"transcribedText": transcribed_text})
-            
-        except Exception as e:
-            traceback.print_exc()
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-            return jsonify({"error": "Gagal memproses audio", "details": str(e)}), 500
+        return jsonify({'error': 'Gagal memproses audio'}), 500
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    return "OK", 200
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    # Gunakan Gunicorn atau server WSGI lain untuk produksi
+    app.run(host='0.0.0.0', port=5002, debug=True)

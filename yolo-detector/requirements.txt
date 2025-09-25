@@ -1,0 +1,4 @@
+flask
+ultralytics
+torch
+torchvision

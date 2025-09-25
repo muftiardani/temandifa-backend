@@ -1,50 +1,42 @@
-import os
-import json
 from flask import Flask, request, jsonify
-from werkzeug.utils import secure_filename
-from detect import detect_objects
-import traceback
+from detect import detect_objects_from_image
+from ultralytics import YOLO
+import logging
 
 app = Flask(__name__)
 
-UPLOAD_FOLDER = 'temp_uploads'
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+# Konfigurasi logging
+logging.basicConfig(level=logging.INFO)
 
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+# Muat model sekali saat aplikasi dimulai
+try:
+    model = YOLO('yolov8n.pt')
+    logging.info("Model YOLO berhasil dimuat.")
+except Exception as e:
+    logging.error(f"Gagal memuat model YOLO: {e}")
+    model = None
 
 @app.route('/detect', methods=['POST'])
-def detect_api():
-    if 'image' not in request.files:
-        return jsonify({"error": "Tidak ada bagian file gambar"}), 400
+def detect():
+    if model is None:
+        return jsonify({'error': 'Model tidak tersedia'}), 500
     
-    file = request.files['image']
-    if file.filename == '':
-        return jsonify({"error": "Tidak ada file yang dipilih"}), 400
+    if 'image' not in request.files:
+        return jsonify({'error': 'File gambar tidak ditemukan'}), 400
 
-    if file:
-        filename = secure_filename(file.filename)
-        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(temp_path)
+    image_file = request.files['image']
+    
+    try:
+        results = detect_objects_from_image(model, image_file)
+        return jsonify(results)
+    except Exception as e:
+        logging.error(f"Error saat deteksi objek: {e}")
+        return jsonify({'error': 'Gagal memproses gambar'}), 500
 
-        try:
-            # Panggil fungsi deteksi
-            result_json_str = detect_objects(temp_path)
-            detections = json.loads(result_json_str)
-            
-            os.remove(temp_path)
-            return jsonify(detections)
-            
-        except Exception as e:
-            # Tangkap error apa pun, cetak ke terminal, dan kirim sebagai respons
-            print("--- TRACEBACK ERROR ---")
-            traceback.print_exc()
-            print("-----------------------")
-            
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-                
-            return jsonify({"error": "Gagal memproses gambar", "details": str(e)}), 500
+@app.route('/health', methods=['GET'])
+def health_check():
+    return "OK", 200
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # Gunakan Gunicorn atau server WSGI lain untuk produksi
+    app.run(host='0.0.0.0', port=5001, debug=True)
