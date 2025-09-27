@@ -4,10 +4,8 @@ from ultralytics import YOLO
 from PIL import Image
 
 def detect_objects(image_path):
-    # Muat model YOLOv8n yang sudah dilatih sebelumnya
     model = YOLO("yolov8n.pt")
 
-    # Lakukan deteksi pada gambar
     results = model(image_path)
 
     detections = []
@@ -22,7 +20,6 @@ def detect_objects(image_path):
             class_id = int(box.cls[0])
             class_name = model.names[class_id]
 
-            # Normalisasi koordinat (0-1) agar bisa diskalakan di frontend
             normalized_bbox = [
                 float(x1) / width,
                 float(y1) / height,

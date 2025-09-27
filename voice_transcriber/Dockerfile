@@ -2,7 +2,6 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Instal dependensi sistem yang dibutuhkan oleh whisper
 RUN apt-get update && apt-get install -y ffmpeg
 
 COPY ./voice_transcriber/requirements.txt .

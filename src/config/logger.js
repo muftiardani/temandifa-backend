@@ -17,8 +17,6 @@ const logger = winston.createLogger({
   ],
 });
 
-// Jika tidak di lingkungan produksi, tambahkan log ke konsol
-// dengan format yang lebih sederhana dan berwarna.
 if (process.env.NODE_ENV !== "production") {
   logger.add(
     new winston.transports.Console({

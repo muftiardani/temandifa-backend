@@ -5,7 +5,6 @@ const path = require("path");
 
 const router = express.Router();
 
-// Konfigurasi Multer dengan validasi
 const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,

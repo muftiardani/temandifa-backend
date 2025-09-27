@@ -15,8 +15,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // Rate Limiter: Batasi setiap IP hingga 100 permintaan per 15 menit
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 menit
-  max: 100, // maks 100 permintaan per IP
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   message:

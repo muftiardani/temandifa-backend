@@ -2,3 +2,4 @@ flask
 ultralytics
 torch
 torchvision
+gunicorn

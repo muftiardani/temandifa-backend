@@ -1,17 +1,12 @@
 const axios = require("axios");
 const FormData = require("form-data");
 const Tesseract = require("tesseract.js");
-const logger = require("../config/logger"); // Impor logger Winston
+const logger = require("../config/logger");
 
-// Ambil URL layanan dari environment variables dengan fallback ke localhost
 const DETECTOR_URL = process.env.DETECTOR_URL || "http://localhost:5001/detect";
 const TRANSCRIBER_URL =
   process.env.TRANSCRIBER_URL || "http://localhost:5002/transcribe";
 
-/**
- * Menerima file gambar, meneruskannya ke layanan deteksi objek Python,
- * dan mengembalikan hasilnya.
- */
 exports.detectObject = async (req, res) => {
   if (!req.file) {
     logger.warn("Percobaan deteksi objek tanpa file.");
@@ -45,10 +40,6 @@ exports.detectObject = async (req, res) => {
   }
 };
 
-/**
- * Menerima file gambar, melakukan OCR menggunakan Tesseract.js,
- * dan mengembalikan teks yang terdeteksi.
- */
 exports.scanImage = async (req, res) => {
   if (!req.file) {
     logger.warn("Percobaan pemindaian gambar tanpa file.");
@@ -64,13 +55,9 @@ exports.scanImage = async (req, res) => {
   try {
     const {
       data: { text },
-    } = await Tesseract.recognize(
-      req.file.buffer,
-      "ind", // Menggunakan bahasa Indonesia
-      {
-        logger: (m) => logger.info(`Status Tesseract: ${JSON.stringify(m)}`),
-      }
-    );
+    } = await Tesseract.recognize(req.file.buffer, "ind", {
+      logger: (m) => logger.info(`Status Tesseract: ${JSON.stringify(m)}`),
+    });
 
     logger.info("Proses OCR berhasil.");
     res.json({ scannedText: text });
@@ -83,10 +70,6 @@ exports.scanImage = async (req, res) => {
   }
 };
 
-/**
- * Menerima file audio, meneruskannya ke layanan transkripsi Python,
- * dan mengembalikan hasilnya.
- */
 exports.transcribeAudio = async (req, res) => {
   if (!req.file) {
     logger.warn("Percobaan transkripsi audio tanpa file.");

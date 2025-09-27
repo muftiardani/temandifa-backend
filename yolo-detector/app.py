@@ -5,10 +5,8 @@ import logging
 
 app = Flask(__name__)
 
-# Konfigurasi logging
 logging.basicConfig(level=logging.INFO)
 
-# Muat model sekali saat aplikasi dimulai
 try:
     model = YOLO('yolov8n.pt')
     logging.info("Model YOLO berhasil dimuat.")
