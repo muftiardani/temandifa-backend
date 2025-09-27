@@ -12,8 +12,10 @@ services:
       - DETECTOR_URL=http://yolo-detector:5001/detect
       - TRANSCRIBER_URL=http://voice-transcriber:5002/transcribe
     depends_on:
-      - yolo-detector
-      - voice-transcriber
+      yolo-detector:
+        condition: service_healthy
+      voice-transcriber:
+        condition: service_healthy
     networks:
       - temandifa-net
 
@@ -23,6 +25,11 @@ services:
       dockerfile: yolo-detector/Dockerfile
     ports:
       - "5001:5001"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - temandifa-net
 
@@ -32,6 +39,11 @@ services:
       dockerfile: voice_transcriber/Dockerfile
     ports:
       - "5002:5002"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5002/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - temandifa-net
 

@@ -1,4 +1,5 @@
 const express = require("express");
+const { body } = require("express-validator");
 const multer = require("multer");
 const apiController = require("../controllers/apiController");
 const path = require("path");
@@ -9,7 +10,7 @@ const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 10 * 1024 * 1024, // Batas ukuran file 10MB
+    fileSize: 10 * 1024 * 1024,
   },
   fileFilter: (req, file, cb) => {
     const filetypes = /jpeg|jpg|png|m4a|mp3|wav/;
@@ -25,11 +26,33 @@ const upload = multer({
   },
 });
 
-router.post("/detect", upload.single("image"), apiController.detectObject);
-router.post("/scan", upload.single("image"), apiController.scanImage);
+const fileUploadValidator = (fieldName) => [
+  (req, res, next) => {
+    if (!req.file) {
+      return res
+        .status(400)
+        .json({ error: `Tidak ada file ${fieldName} yang diunggah` });
+    }
+    next();
+  },
+];
+
+router.post(
+  "/detect",
+  upload.single("image"),
+  fileUploadValidator("image"),
+  apiController.detectObject
+);
+router.post(
+  "/scan",
+  upload.single("image"),
+  fileUploadValidator("image"),
+  apiController.scanImage
+);
 router.post(
   "/transcribe",
   upload.single("audio"),
+  fileUploadValidator("audio"),
   apiController.transcribeAudio
 );
 

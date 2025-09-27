@@ -1,9 +1,12 @@
 from flask import Flask, request, jsonify
+from prometheus_flask_exporter import PrometheusMetrics
 from detect import detect_objects_from_image
 from ultralytics import YOLO
 import logging
 
 app = Flask(__name__)
+
+metrics = PrometheusMetrics(app)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -36,5 +39,4 @@ def health_check():
     return "OK", 200
 
 if __name__ == '__main__':
-    # Gunakan Gunicorn atau server WSGI lain untuk produksi
     app.run(host='0.0.0.0', port=5001, debug=True)

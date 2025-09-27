@@ -2,103 +2,56 @@ const axios = require("axios");
 const FormData = require("form-data");
 const Tesseract = require("tesseract.js");
 const logger = require("../config/logger");
+const { validationResult } = require("express-validator");
 
-const DETECTOR_URL = process.env.DETECTOR_URL || "http://localhost:5001/detect";
-const TRANSCRIBER_URL =
-  process.env.TRANSCRIBER_URL || "http://localhost:5002/transcribe";
+const DETECTOR_URL = process.env.DETECTOR_URL;
+const TRANSCRIBER_URL = process.env.TRANSCRIBER_URL;
 
-exports.detectObject = async (req, res) => {
-  if (!req.file) {
-    logger.warn("Percobaan deteksi objek tanpa file.");
-    return res
-      .status(400)
-      .json({ error: "Tidak ada file gambar yang diunggah" });
-  }
-
-  try {
-    const formData = new FormData();
-    formData.append("image", req.file.buffer, {
-      filename: req.file.originalname,
-      contentType: req.file.mimetype,
-    });
-
-    logger.info(`Meneruskan permintaan deteksi objek ke: ${DETECTOR_URL}`);
-    const response = await axios.post(DETECTOR_URL, formData, {
-      headers: formData.getHeaders(),
-    });
-
-    res.json(response.data);
-  } catch (error) {
-    logger.error("Error saat berkomunikasi dengan layanan deteksi objek:", {
-      message: error.message,
-      stack: error.stack,
-      response: error.response ? error.response.data : "No response data",
-    });
-    res
-      .status(500)
-      .json({ error: "Gagal memproses gambar untuk deteksi objek" });
-  }
+const asyncHandler = (fn) => (req, res, next) => {
+  return Promise.resolve(fn(req, res, next)).catch(next);
 };
 
-exports.scanImage = async (req, res) => {
-  if (!req.file) {
-    logger.warn("Percobaan pemindaian gambar tanpa file.");
-    return res
-      .status(400)
-      .json({ error: "Tidak ada file gambar yang diunggah" });
-  }
+exports.detectObject = asyncHandler(async (req, res, next) => {
+  const formData = new FormData();
+  formData.append("image", req.file.buffer, {
+    filename: req.file.originalname,
+    contentType: req.file.mimetype,
+  });
 
+  logger.info(`Meneruskan permintaan deteksi objek ke: ${DETECTOR_URL}`);
+  const response = await axios.post(DETECTOR_URL, formData, {
+    headers: formData.getHeaders(),
+  });
+
+  res.json(response.data);
+});
+
+exports.scanImage = asyncHandler(async (req, res, next) => {
   logger.info("Memulai proses OCR untuk gambar:", {
     filename: req.file.originalname,
   });
 
-  try {
-    const {
-      data: { text },
-    } = await Tesseract.recognize(req.file.buffer, "ind", {
-      logger: (m) => logger.info(`Status Tesseract: ${JSON.stringify(m)}`),
-    });
+  const {
+    data: { text },
+  } = await Tesseract.recognize(req.file.buffer, "ind", {
+    logger: (m) => logger.info(`Status Tesseract: ${JSON.stringify(m)}`),
+  });
 
-    logger.info("Proses OCR berhasil.");
-    res.json({ scannedText: text });
-  } catch (error) {
-    logger.error("Error saat melakukan OCR:", {
-      message: error.message,
-      stack: error.stack,
-    });
-    res.status(500).json({ error: "Gagal memindai teks dari gambar" });
-  }
-};
+  logger.info("Proses OCR berhasil.");
+  res.json({ scannedText: text });
+});
 
-exports.transcribeAudio = async (req, res) => {
-  if (!req.file) {
-    logger.warn("Percobaan transkripsi audio tanpa file.");
-    return res
-      .status(400)
-      .json({ error: "Tidak ada file audio yang diunggah" });
-  }
+exports.transcribeAudio = asyncHandler(async (req, res, next) => {
+  const formData = new FormData();
+  formData.append("audio", req.file.buffer, {
+    filename: req.file.originalname,
+    contentType: req.file.mimetype,
+  });
 
-  try {
-    const formData = new FormData();
-    formData.append("audio", req.file.buffer, {
-      filename: req.file.originalname,
-      contentType: req.file.mimetype,
-    });
+  logger.info(`Meneruskan permintaan transkripsi audio ke: ${TRANSCRIBER_URL}`);
+  const response = await axios.post(TRANSCRIBER_URL, formData, {
+    headers: formData.getHeaders(),
+  });
 
-    logger.info(
-      `Meneruskan permintaan transkripsi audio ke: ${TRANSCRIBER_URL}`
-    );
-    const response = await axios.post(TRANSCRIBER_URL, formData, {
-      headers: formData.getHeaders(),
-    });
-
-    res.json(response.data);
-  } catch (error) {
-    logger.error("Error saat berkomunikasi dengan layanan transkripsi:", {
-      message: error.message,
-      stack: error.stack,
-      response: error.response ? error.response.data : "No response data",
-    });
-    res.status(500).json({ error: "Gagal memproses audio untuk transkripsi" });
-  }
-};
+  res.json(response.data);
+});

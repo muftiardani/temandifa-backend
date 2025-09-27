@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: yolo-detector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: yolo-detector
+  template:
+    metadata:
+      labels:
+        app: yolo-detector
+    spec:
+      containers:
+      - name: yolo-detector
+        image: yourdockerhubusername/temandifa-yolo-detector:latest
+        ports:
+        - containerPort: 5001

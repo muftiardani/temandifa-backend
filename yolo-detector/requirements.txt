@@ -1,5 +1,5 @@
-flask
-ultralytics
-torch
-torchvision
+Flask
 gunicorn
+ultralytics
+Pillow
+prometheus-flask-exporter

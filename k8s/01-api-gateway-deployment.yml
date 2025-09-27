@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+      - name: api-gateway
+        image: yourdockerhubusername/temandifa-api-gateway:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: PORT
+          value: "3000"
+        - name: DETECTOR_URL
+          value: "http://yolo-detector-service:5001/detect"
+        - name: TRANSCRIBER_URL
+          value: "http://voice-transcriber-service:5002/transcribe"
