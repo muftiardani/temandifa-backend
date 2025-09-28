@@ -1,6 +1,5 @@
 Flask
 gunicorn
-openai-whisper
-numpy
-ffmpeg-python
+pytesseract
+Pillow
 prometheus-flask-exporter

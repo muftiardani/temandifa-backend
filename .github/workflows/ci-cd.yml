@@ -1,0 +1,70 @@
+name: CI/CD Pipeline for TemanDifa Backend
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push API Gateway
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-gateway:latest
+
+      - name: Build and push YOLO Detector
+        uses: docker/build-push-action@v4
+        with:
+          context: ./yolo-detector
+          file: ./yolo-detector/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-yolo:latest
+
+      - name: Build and push Voice Transcriber
+        uses: docker/build-push-action@v4
+        with:
+          context: ./voice_transcriber
+          file: ./voice_transcriber/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-transcriber:latest
+
+      - name: Build and push OCR Service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./ocr-service
+          file: ./ocr-service/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-ocr:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Production Server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PROD_SERVER_HOST }}
+          username: ${{ secrets.PROD_SERVER_USERNAME }}
+          key: ${{ secrets.PROD_SERVER_SSH_KEY }}
+          script: |
+            cd ~/temandifa-backend
+            docker-compose pull
+            docker-compose up -d
+            echo "Deployment successful!"

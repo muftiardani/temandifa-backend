@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from prometheus_flask_exporter import PrometheusMetrics
 import whisper
 import os
 import logging
@@ -6,6 +7,8 @@ import numpy as np
 import ffmpeg
 
 app = Flask(__name__)
+
+metrics = PrometheusMetrics(app)
 
 logging.basicConfig(level=logging.INFO)
 

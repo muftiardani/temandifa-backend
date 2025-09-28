@@ -1,9 +1,12 @@
 from flask import Flask, request, jsonify
+from prometheus_flask_exporter import PrometheusMetrics
 from detect import detect_objects_from_image
 from ultralytics import YOLO
 import logging
 
 app = Flask(__name__)
+
+metrics = PrometheusMetrics(app)
 
 logging.basicConfig(level=logging.INFO)
 

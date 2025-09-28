@@ -1,56 +1,40 @@
 const axios = require("axios");
 const FormData = require("form-data");
-const Tesseract = require("tesseract.js");
 const logger = require("../config/logger");
 
 const DETECTOR_URL = process.env.DETECTOR_URL;
 const TRANSCRIBER_URL = process.env.TRANSCRIBER_URL;
+const SCANNER_URL = process.env.SCANNER_URL;
 
 const asyncHandler = (fn) => (req, res, next) => {
   return Promise.resolve(fn(req, res, next)).catch(next);
 };
 
-exports.detectObject = asyncHandler(async (req, res, next) => {
+const forwardFileToService = async (serviceUrl, req) => {
   const formData = new FormData();
-  formData.append("image", req.file.buffer, {
+  formData.append(req.file.fieldname, req.file.buffer, {
     filename: req.file.originalname,
     contentType: req.file.mimetype,
   });
 
-  logger.info(`Meneruskan permintaan deteksi objek ke: ${DETECTOR_URL}`);
-  const response = await axios.post(DETECTOR_URL, formData, {
+  logger.info(`Meneruskan permintaan ke: ${serviceUrl}`);
+  const response = await axios.post(serviceUrl, formData, {
     headers: formData.getHeaders(),
   });
+  return response.data;
+};
 
-  res.json(response.data);
+exports.detectObject = asyncHandler(async (req, res) => {
+  const responseData = await forwardFileToService(DETECTOR_URL, req);
+  res.json(responseData);
 });
 
-exports.scanImage = asyncHandler(async (req, res, next) => {
-  logger.info("Memulai proses OCR untuk gambar:", {
-    filename: req.file.originalname,
-  });
-
-  const {
-    data: { text },
-  } = await Tesseract.recognize(req.file.buffer, "ind", {
-    logger: (m) => logger.info(`Status Tesseract: ${JSON.stringify(m)}`),
-  });
-
-  logger.info("Proses OCR berhasil.");
-  res.json({ scannedText: text });
+exports.scanImage = asyncHandler(async (req, res) => {
+  const responseData = await forwardFileToService(SCANNER_URL, req);
+  res.json(responseData);
 });
 
-exports.transcribeAudio = asyncHandler(async (req, res, next) => {
-  const formData = new FormData();
-  formData.append("audio", req.file.buffer, {
-    filename: req.file.originalname,
-    contentType: req.file.mimetype,
-  });
-
-  logger.info(`Meneruskan permintaan transkripsi audio ke: ${TRANSCRIBER_URL}`);
-  const response = await axios.post(TRANSCRIBER_URL, formData, {
-    headers: formData.getHeaders(),
-  });
-
-  res.json(response.data);
+exports.transcribeAudio = asyncHandler(async (req, res) => {
+  const responseData = await forwardFileToService(TRANSCRIBER_URL, req);
+  res.json(responseData);
 });

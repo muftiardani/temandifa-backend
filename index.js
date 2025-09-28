@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const promBundle = require("express-prom-bundle");
 const axios = require("axios");
 const apiRoutes = require("./src/routes/apiRoutes");
 const logger = require("./src/config/logger");
@@ -25,6 +26,17 @@ const limiter = rateLimit({
     "Terlalu banyak permintaan dari IP ini, silakan coba lagi setelah 15 menit",
 });
 app.use(limiter);
+
+const metricsMiddleware = promBundle({
+  includeMethod: true,
+  includePath: true,
+  includeStatusCode: true,
+  includeUp: true,
+  promClient: {
+    collectDefaultMetrics: {},
+  },
+});
+app.use(metricsMiddleware);
 
 app.use("/api", apiRoutes);
 

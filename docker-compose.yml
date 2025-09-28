@@ -2,35 +2,55 @@ version: '3.8'
 
 services:
   api-gateway:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
     ports:
       - "3000:3000"
-    volumes:
-      - .:/usr/src/app
-      - /usr/src/app/node_modules
-    env_file:
-      - .env
+    env_file: .env
     depends_on:
       - yolo-detector
       - voice-transcriber
+      - ocr-service
     networks:
       - temandifa-net
 
   yolo-detector:
-    build:
-      context: ./yolo-detector
-      dockerfile: Dockerfile
-    # Tidak perlu expose port ke host, karena komunikasi via internal network
+    build: ./yolo-detector
+    environment:
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
     networks:
       - temandifa-net
 
   voice-transcriber:
-    build:
-      context: ./voice_transcriber
-      dockerfile: Dockerfile
-    # Tidak perlu expose port ke host
+    build: ./voice_transcriber
+    environment:
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
+    networks:
+      - temandifa-net
+
+  ocr-service:
+    build: ./ocr-service
+    environment:
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
+    networks:
+      - temandifa-net
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - temandifa-net
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    ports:
+      - "4000:3000"
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
     networks:
       - temandifa-net
 

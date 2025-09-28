@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:3000']
+
+  - job_name: 'yolo-detector'
+    static_configs:
+      - targets: ['yolo-detector:5001']
+
+  - job_name: 'voice-transcriber'
+    static_configs:
+      - targets: ['voice-transcriber:5002']
+
+  - job_name: 'ocr-service'
+    static_configs:
+      - targets: ['ocr-service:5003']
