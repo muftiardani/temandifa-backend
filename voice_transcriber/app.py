@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO)
 
 model = None
 try:
-    model = whisper.load_model("medium") # Menggunakan model 'base' untuk inisialisasi lebih cepat jika turbo tidak ada
+    model = whisper.load_model("turbo")
     logging.info("Model Whisper berhasil dimuat.")
 except Exception as e:
     logging.error(f"Gagal memuat model Whisper: {e}")
@@ -46,7 +46,6 @@ def transcribe_audio():
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    # Health check yang lebih baik: periksa apakah model sudah dimuat
     if model:
         return jsonify({"status": "OK", "message": "Model is loaded."}), 200
     else:

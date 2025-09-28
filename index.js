@@ -3,7 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
-const axios = require("axios"); // Import axios
+const axios = require("axios");
 const apiRoutes = require("./src/routes/apiRoutes");
 const logger = require("./src/config/logger");
 const errorHandler = require("./src/middleware/errorHandler");
@@ -28,7 +28,6 @@ app.use(limiter);
 
 app.use("/api", apiRoutes);
 
-// Health Check yang lebih komprehensif
 app.get("/health", async (req, res) => {
   try {
     const services = [

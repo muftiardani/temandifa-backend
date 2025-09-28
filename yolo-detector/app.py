@@ -9,7 +9,6 @@ logging.basicConfig(level=logging.INFO)
 
 model = None
 try:
-    # Model dimuat sekali saat aplikasi dimulai
     model = YOLO('yolov8l.pt')
     logging.info("Model YOLO berhasil dimuat.")
 except Exception as e:
@@ -26,7 +25,6 @@ def detect():
     image_file = request.files['image']
     
     try:
-        # Objek model yang sudah dimuat di-pass ke fungsi deteksi
         results = detect_objects_from_image(model, image_file)
         return jsonify(results)
     except Exception as e:
@@ -35,7 +33,6 @@ def detect():
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    # Health check yang lebih baik: periksa apakah model sudah dimuat
     if model:
         return jsonify({"status": "OK", "message": "Model is loaded."}), 200
     else:

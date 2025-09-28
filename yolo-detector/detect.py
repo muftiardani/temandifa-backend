@@ -3,7 +3,6 @@ from ultralytics import YOLO
 from PIL import Image
 
 def detect_objects_from_image(model, image_path):
-    # Model tidak lagi dimuat di sini, melainkan diterima sebagai argumen
     results = model(image_path)
 
     detections = []
