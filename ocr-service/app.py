@@ -22,7 +22,6 @@ def scan_image():
         image_bytes = image_file.read()
         image = Image.open(io.BytesIO(image_bytes))
 
-        # Menggunakan Tesseract untuk mengekstrak teks dengan bahasa Indonesia
         text = pytesseract.image_to_string(image, lang='ind')
 
         logging.info("Proses OCR berhasil.")

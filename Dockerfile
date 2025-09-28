@@ -1,13 +1,24 @@
-# Stage 1: Build
-FROM node:18-alpine AS builder
+# --- Tahap 1: Build Stage ---
+FROM node:18-alpine as builder
+
 WORKDIR /usr/src/app
+
 COPY package*.json ./
-RUN npm ci --only=production
+
+RUN npm install --only=production
+
+# --- Tahap 2: Final/Production Stage ---
+FROM node:18-alpine
+
+WORKDIR /usr/src/app
+
+COPY --from=builder /usr/src/app/node_modules ./node_modules
+
 COPY . .
 
-# Stage 2: Production
-FROM node:18-alpine
-WORKDIR /usr/src/app
-COPY --from=builder /usr/src/app .
-ENV NODE_ENV=production
-CMD [ "node", "index.js" ]
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
+
+EXPOSE 3000
+
+CMD ["node", "index.js"]
