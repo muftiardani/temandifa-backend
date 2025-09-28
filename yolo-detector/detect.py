@@ -1,11 +1,9 @@
-import sys
 import json
 from ultralytics import YOLO
 from PIL import Image
 
-def detect_objects(image_path):
-    model = YOLO("yolov8l.pt")
-
+def detect_objects_from_image(model, image_path):
+    # Model tidak lagi dimuat di sini, melainkan diterima sebagai argumen
     results = model(image_path)
 
     detections = []
@@ -33,9 +31,4 @@ def detect_objects(image_path):
                 "bbox": normalized_bbox
             })
             
-    return json.dumps(detections)
-
-if __name__ == "__main__":
-    image_path_arg = sys.argv[1]
-    result_json = detect_objects(image_path_arg)
-    print(result_json)
+    return detections

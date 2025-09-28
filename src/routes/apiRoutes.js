@@ -1,5 +1,4 @@
 const express = require("express");
-const { body } = require("express-validator");
 const multer = require("multer");
 const apiController = require("../controllers/apiController");
 const path = require("path");

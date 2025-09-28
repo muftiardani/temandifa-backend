@@ -2,7 +2,6 @@ const axios = require("axios");
 const FormData = require("form-data");
 const Tesseract = require("tesseract.js");
 const logger = require("../config/logger");
-const { validationResult } = require("express-validator");
 
 const DETECTOR_URL = process.env.DETECTOR_URL;
 const TRANSCRIBER_URL = process.env.TRANSCRIBER_URL;

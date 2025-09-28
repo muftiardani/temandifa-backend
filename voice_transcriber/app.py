@@ -9,12 +9,12 @@ app = Flask(__name__)
 
 logging.basicConfig(level=logging.INFO)
 
+model = None
 try:
-    model = whisper.load_model("turbo")
+    model = whisper.load_model("medium") # Menggunakan model 'base' untuk inisialisasi lebih cepat jika turbo tidak ada
     logging.info("Model Whisper berhasil dimuat.")
 except Exception as e:
     logging.error(f"Gagal memuat model Whisper: {e}")
-    model = None
 
 @app.route('/transcribe', methods=['POST'])
 def transcribe_audio():
@@ -46,4 +46,8 @@ def transcribe_audio():
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    return "OK", 200
+    # Health check yang lebih baik: periksa apakah model sudah dimuat
+    if model:
+        return jsonify({"status": "OK", "message": "Model is loaded."}), 200
+    else:
+        return jsonify({"status": "ERROR", "message": "Model is not loaded."}), 500
