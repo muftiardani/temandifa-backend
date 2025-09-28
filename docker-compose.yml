@@ -1,9 +1,15 @@
+version: '3.8'
+
 services:
   api-gateway:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${DOCKERHUB_USERNAME}/temandifa-gateway:latest
     ports:
       - "3000:3000"
-    env_file: .env
+    env_file:
+      - .env
     depends_on:
       - yolo-detector
       - voice-transcriber
@@ -13,6 +19,7 @@ services:
 
   yolo-detector:
     build: ./yolo-detector
+    image: ${DOCKERHUB_USERNAME}/temandifa-yolo:latest
     environment:
       - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
     networks:
@@ -20,6 +27,7 @@ services:
 
   voice-transcriber:
     build: ./voice_transcriber
+    image: ${DOCKERHUB_USERNAME}/temandifa-transcriber:latest
     environment:
       - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
     networks:
@@ -27,6 +35,7 @@ services:
 
   ocr-service:
     build: ./ocr-service
+    image: ${DOCKERHUB_USERNAME}/temandifa-ocr:latest
     environment:
       - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
     networks:
