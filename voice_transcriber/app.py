@@ -1,20 +1,16 @@
 from flask import Flask, request, jsonify
-from prometheus_flask_exporter import PrometheusMetrics
 import whisper
 import os
 import logging
-import io
 import numpy as np
 import ffmpeg
 
 app = Flask(__name__)
 
-metrics = PrometheusMetrics(app)
-
 logging.basicConfig(level=logging.INFO)
 
 try:
-    model = whisper.load_model("base")
+    model = whisper.load_model("turbo")
     logging.info("Model Whisper berhasil dimuat.")
 except Exception as e:
     logging.error(f"Gagal memuat model Whisper: {e}")
@@ -51,6 +47,3 @@ def transcribe_audio():
 @app.route('/health', methods=['GET'])
 def health_check():
     return "OK", 200
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5002, debug=True)

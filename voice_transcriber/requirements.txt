@@ -3,4 +3,3 @@ gunicorn
 openai-whisper
 numpy
 ffmpeg-python
-prometheus-flask-exporter

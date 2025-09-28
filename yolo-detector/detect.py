@@ -4,7 +4,7 @@ from ultralytics import YOLO
 from PIL import Image
 
 def detect_objects(image_path):
-    model = YOLO("yolov8n.pt")
+    model = YOLO("yolov8l.pt")
 
     results = model(image_path)
 

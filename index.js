@@ -3,16 +3,12 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
-const promClient = require("prom-client");
 const apiRoutes = require("./src/routes/apiRoutes");
 const logger = require("./src/config/logger");
 const errorHandler = require("./src/middleware/errorHandler");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-const collectDefaultMetrics = promClient.collectDefaultMetrics;
-collectDefaultMetrics();
 
 app.use(helmet());
 app.use(cors());
@@ -33,11 +29,6 @@ app.use("/api", apiRoutes);
 
 app.get("/health", (req, res) => {
   res.status(200).send("OK");
-});
-
-app.get("/metrics", async (req, res) => {
-  res.set("Content-Type", promClient.register.contentType);
-  res.end(await promClient.register.metrics());
 });
 
 app.use(errorHandler);

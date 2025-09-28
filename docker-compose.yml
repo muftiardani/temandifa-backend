@@ -7,43 +7,30 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
-    environment:
-      - PORT=3000
-      - DETECTOR_URL=http://yolo-detector:5001/detect
-      - TRANSCRIBER_URL=http://voice-transcriber:5002/transcribe
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    env_file:
+      - .env
     depends_on:
-      yolo-detector:
-        condition: service_healthy
-      voice-transcriber:
-        condition: service_healthy
+      - yolo-detector
+      - voice-transcriber
     networks:
       - temandifa-net
 
   yolo-detector:
     build:
-      context: .
-      dockerfile: yolo-detector/Dockerfile
-    ports:
-      - "5001:5001"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5001/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      context: ./yolo-detector
+      dockerfile: Dockerfile
+    # Tidak perlu expose port ke host, karena komunikasi via internal network
     networks:
       - temandifa-net
 
   voice-transcriber:
     build:
-      context: .
-      dockerfile: voice_transcriber/Dockerfile
-    ports:
-      - "5002:5002"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5002/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      context: ./voice_transcriber
+      dockerfile: Dockerfile
+    # Tidak perlu expose port ke host
     networks:
       - temandifa-net
 
