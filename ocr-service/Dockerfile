@@ -1,24 +1,27 @@
-# --- Tahap 1: Build Stage ---
-FROM python:3.9-slim-bullseye AS builder
+# Tahap 1: Menggunakan base image
+FROM temandifa-python-base:latest AS builder
+
+# Menyalin dan menginstal dependensi khusus untuk layanan ini
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential && \
-    rm -rf /var/lib/apt/lists/*
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --upgrade pip
-COPY requirements.txt .
+COPY ./ocr-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# --- Tahap 2: Final/Production Stage ---
-FROM python:3.9-slim-bullseye
+
+# Tahap 2: Final/Production Stage
+FROM temandifa-python-base:latest
 WORKDIR /app
-COPY --from=builder /opt/venv /opt/venv
-COPY . .
+
+# Menginstal Tesseract OCR dan paket bahasa Indonesia
 RUN apt-get update && \
     apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-ind && \
     rm -rf /var/lib/apt/lists/*
-RUN useradd -m appuser && chown -R appuser:appuser /app
-USER appuser
-ENV PATH="/opt/venv/bin:$PATH"
+
+# Menyalin dependensi yang sudah terinstal dari tahap builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Menyalin kode aplikasi
+COPY ./ocr-service/ .
+
+# Expose port dan jalankan aplikasi
 EXPOSE 5003
 CMD ["gunicorn", "--bind", "0.0.0.0:5003", "--workers", "${GUNICORN_WORKERS:-2}", "app:app"]

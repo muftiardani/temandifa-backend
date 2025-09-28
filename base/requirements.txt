@@ -1,0 +1,5 @@
+Flask
+gunicorn
+prometheus-flask-exporter
+Pillow
+pytest

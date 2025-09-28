@@ -1,5 +1,1 @@
-Flask
-gunicorn
 ultralytics
-Pillow
-prometheus-flask-exporter

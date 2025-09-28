@@ -1,15 +1,12 @@
 from flask import Flask, request, jsonify
 from prometheus_flask_exporter import PrometheusMetrics
 import whisper
-import os
 import logging
 import numpy as np
 import ffmpeg
 
 app = Flask(__name__)
-
 metrics = PrometheusMetrics(app)
-
 logging.basicConfig(level=logging.INFO)
 
 model = None
@@ -32,7 +29,7 @@ def transcribe_audio():
     try:
         audio_bytes = audio_file.read()
         
-        out, _ = (
+        out, err = (
             ffmpeg
             .input('pipe:', threads=0)
             .output('pipe:', format='s16le', ac=1, ar=16000)
@@ -43,6 +40,9 @@ def transcribe_audio():
 
         result = model.transcribe(audio_np)
         return jsonify({'transcribedText': result['text']})
+    except ffmpeg.Error as e:
+        logging.error(f"Error dari ffmpeg saat memproses audio: {e.stderr.decode('utf8')}")
+        return jsonify({'error': 'Gagal memproses audio, format mungkin tidak didukung.'}), 400
     except Exception as e:
         logging.error(f"Error saat transkripsi audio: {e}")
         return jsonify({'error': 'Gagal memproses audio'}), 500

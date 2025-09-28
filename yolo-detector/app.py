@@ -3,11 +3,10 @@ from prometheus_flask_exporter import PrometheusMetrics
 from detect import detect_objects_from_image
 from ultralytics import YOLO
 import logging
+from PIL import UnidentifiedImageError
 
 app = Flask(__name__)
-
 metrics = PrometheusMetrics(app)
-
 logging.basicConfig(level=logging.INFO)
 
 model = None
@@ -30,6 +29,9 @@ def detect():
     try:
         results = detect_objects_from_image(model, image_file)
         return jsonify(results)
+    except UnidentifiedImageError:
+        logging.error("File yang diunggah bukan format gambar yang dikenali.")
+        return jsonify({'error': 'Format gambar tidak valid'}), 400
     except Exception as e:
         logging.error(f"Error saat deteksi objek: {e}")
         return jsonify({'error': 'Gagal memproses gambar'}), 500

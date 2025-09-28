@@ -17,27 +17,45 @@ services:
     networks:
       - temandifa-net
 
+  python-base-builder:
+    build:
+      context: .
+      dockerfile: base/Dockerfile
+    image: temandifa-python-base:latest
+
   yolo-detector:
-    build: ./yolo-detector
+    build:
+      context: .
+      dockerfile: yolo-detector/Dockerfile
     image: ${DOCKERHUB_USERNAME}/temandifa-yolo:latest
     environment:
       - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
+    depends_on:
+      - python-base-builder
     networks:
       - temandifa-net
 
   voice-transcriber:
-    build: ./voice_transcriber
+    build:
+      context: .
+      dockerfile: voice_transcriber/Dockerfile
     image: ${DOCKERHUB_USERNAME}/temandifa-transcriber:latest
     environment:
       - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
+    depends_on:
+      - python-base-builder
     networks:
       - temandifa-net
 
   ocr-service:
-    build: ./ocr-service
+    build:
+      context: .
+      dockerfile: ocr-service/Dockerfile
     image: ${DOCKERHUB_USERNAME}/temandifa-ocr:latest
     environment:
       - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
+    depends_on:
+      - python-base-builder
     networks:
       - temandifa-net
 

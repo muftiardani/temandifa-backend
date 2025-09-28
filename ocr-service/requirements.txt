@@ -1,5 +1,1 @@
-Flask
-gunicorn
 pytesseract
-Pillow
-prometheus-flask-exporter

@@ -1,14 +1,12 @@
 from flask import Flask, request, jsonify
 from prometheus_flask_exporter import PrometheusMetrics
 import pytesseract
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 import logging
 import io
 
 app = Flask(__name__)
-
 metrics = PrometheusMetrics(app)
-
 logging.basicConfig(level=logging.INFO)
 
 @app.route('/scan', methods=['POST'])
@@ -26,6 +24,9 @@ def scan_image():
 
         logging.info("Proses OCR berhasil.")
         return jsonify({'scannedText': text})
+    except UnidentifiedImageError:
+        logging.error("File yang diunggah bukan format gambar yang dikenali.")
+        return jsonify({'error': 'Format gambar tidak valid'}), 400
     except Exception as e:
         logging.error(f"Error saat proses OCR: {e}")
         return jsonify({'error': 'Gagal memproses gambar'}), 500
