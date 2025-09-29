@@ -1,17 +1,44 @@
-# dependencies
+# IDE & Sistem Operasi
+# Mengabaikan file yang dibuat secara otomatis oleh editor kode dan OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# File Log
+# Mengabaikan semua jenis file log
+*.log
+npm-debug.log*
+logs/
+
+# Dependensi & File Build
+# Mengabaikan folder dependensi yang bisa diinstal ulang
 node_modules/
+dist/
+build/
 
-# File environment variables
-# .env
-
-# Folder lingkungan virtual Python
+# Python
+# Mengabaikan cache, file terkompilasi, dan folder virtual environment
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
 .venv/
+venv/
 
-# Folder sementara untuk file yang diunggah
+# File Lingkungan
+# Jangan pernah memasukkan file .env yang berisi kunci rahasia ke Git
+.env
+.env.*
+
+# Folder Upload Sementara
+# Mengabaikan folder yang digunakan untuk unggahan sementara
 uploads/
 temp_uploads/
 temp_audio_uploads/
-
-# File cache dan log Python
-__pycache__/
-*.pyc

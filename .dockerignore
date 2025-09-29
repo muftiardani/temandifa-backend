@@ -1,21 +1,60 @@
-# Git
+# Git - Mencegah konteks Git masuk ke dalam image
 .git
 .gitignore
+.github/
 
 # Node.js
-node_modules
-npm-debug.log
+# Mengabaikan folder dependensi dan file log
+node_modules/
+npm-debug.log*
+package-lock.json
 
 # Python
+# Mengabaikan cache, file terkompilasi, dan folder virtual environment
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.env
-.venv
+.pytest_cache/
+.venv/
 venv/
+pip-log.txt
+pip-delete-this-directory.txt
 
-# IDE & OS
+# Testing
+# Mengabaikan semua file dan folder yang hanya relevan untuk testing
+__tests__/
+*_test.py
+test_*.py
+pytest.ini
+jest.config.js
+setup-jest.js
+
+# File Lingkungan & Konfigurasi Lokal
+# File-file ini berisi variabel sensitif atau konfigurasi lokal
+.env
+.env.*
+docker-compose.override.yml
+
+# Dokumentasi
+# Tidak diperlukan untuk menjalankan aplikasi
+README.md
+docs/
+
+# File Log
+# Mengabaikan semua jenis file log
+*.log
+logs
+*.log*
+
+# IDE & Sistem Operasi
+# File spesifik untuk editor kode dan sistem operasi
 .vscode/
 .idea/
 .DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+Thumbs.db
