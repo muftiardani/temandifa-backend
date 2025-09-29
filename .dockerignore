@@ -21,6 +21,10 @@ venv/
 pip-log.txt
 pip-delete-this-directory.txt
 
+# Model Machine Learning
+# Mengabaikan file model agar tidak masuk ke dalam image
+*.pt
+
 # Testing
 # Mengabaikan semua file dan folder yang hanya relevan untuk testing
 __tests__/

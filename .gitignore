@@ -32,6 +32,10 @@ __pycache__/
 .venv/
 venv/
 
+# Model Machine Learning
+# Mengabaikan file model yang diunduh otomatis
+*.pt
+
 # File Lingkungan
 # Jangan pernah memasukkan file .env yang berisi kunci rahasia ke Git
 .env
