@@ -3,3 +3,4 @@ gunicorn
 prometheus-flask-exporter
 Pillow
 pytest
+pytest-mock

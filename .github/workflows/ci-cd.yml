@@ -6,14 +6,42 @@ on:
       - main
 
 jobs:
-  build-and-push:
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install Node.js dependencies and Run Tests
+        run: |
+          npm install
+          npm test # Pastikan skrip 'test' ada di package.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      - name: Install Python dependencies and Run Tests
+        run: |
+          pip install pytest # Atau tambahkan ke requirements.txt
+          pip install -r base/requirements.txt
+          pip install -r yolo-detector/requirements.txt
+          pip install -r voice_transcriber/requirements.txt
+          pip install -r ocr-service/requirements.txt
+          pytest # Pastikan ada file test_*.py di repositori
+
+  build-scan-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
       - name: Login to Docker Hub
         uses: docker/login-action@v2
@@ -21,40 +49,45 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push API Gateway
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-gateway:latest
+      - name: Set image names
+        run: |
+          echo "GATEWAY_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/temanDifa-gateway:latest" >> $GITHUB_ENV
+          echo "YOLO_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/temandifa-yolo:latest" >> $GITHUB_ENV
+          echo "TRANSCRIBER_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/temandifa-transcriber:latest" >> $GITHUB_ENV
+          echo "OCR_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/temandifa-ocr:latest" >> $GITHUB_ENV
+          echo "BASE_IMAGE=temandifa-python-base:latest" >> $GITHUB_ENV
+      
+      - name: Build all images locally
+        run: |
+          docker build -t ${{ env.BASE_IMAGE }} -f base/Dockerfile .
+          docker build -t ${{ env.GATEWAY_IMAGE }} -f Dockerfile .
+          docker build -t ${{ env.YOLO_IMAGE }} -f yolo-detector/Dockerfile .
+          docker build -t ${{ env.TRANSCRIBER_IMAGE }} -f voice_transcriber/Dockerfile .
+          docker build -t ${{ env.OCR_IMAGE }} -f ocr-service/Dockerfile .
 
-      - name: Build and push YOLO Detector
-        uses: docker/build-push-action@v4
-        with:
-          context: ./yolo-detector
-          file: ./yolo-detector/Dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-yolo:latest
-
-      - name: Build and push Voice Transcriber
-        uses: docker/build-push-action@v4
-        with:
-          context: ./voice_transcriber
-          file: ./voice_transcriber/Dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-transcriber:latest
-
-      - name: Build and push OCR Service
-        uses: docker/build-push-action@v4
-        with:
-          context: ./ocr-service
-          file: ./ocr-service/Dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-ocr:latest
+      - name: Install Trivy and Scan images
+        run: |
+          # Install Trivy
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install trivy -y
+          
+          # Scan images locally (Rekomendasi: tambahkan --ignore-unfixed)
+          trivy image --ignore-unfixed --exit-code 1 --severity HIGH,CRITICAL ${{ env.GATEWAY_IMAGE }}
+          trivy image --ignore-unfixed --exit-code 1 --severity HIGH,CRITICAL ${{ env.YOLO_IMAGE }}
+          trivy image --ignore-unfixed --exit-code 1 --severity HIGH,CRITICAL ${{ env.TRANSCRIBER_IMAGE }}
+          trivy image --ignore-unfixed --exit-code 1 --severity HIGH,CRITICAL ${{ env.OCR_IMAGE }}
+      
+      - name: Push images ONLY if scan passes
+        run: |
+          docker push ${{ env.GATEWAY_IMAGE }}
+          docker push ${{ env.YOLO_IMAGE }}
+          docker push ${{ env.TRANSCRIBER_IMAGE }}
+          docker push ${{ env.OCR_IMAGE }}
 
   deploy:
-    needs: build-and-push
+    needs: build-scan-and-push
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to Production Server

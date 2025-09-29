@@ -1,4 +1,3 @@
-import json
 from ultralytics import YOLO
 from PIL import Image
 
