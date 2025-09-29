@@ -1,7 +1,3 @@
-Tentu, berikut adalah draf `README.md` yang komprehensif untuk proyek *backend* Anda, dibuat berdasarkan analisis kode yang telah diberikan.
-
------
-
 # TemanDifa Backend
 
 Selamat datang di repositori *backend* untuk aplikasi TemanDifa. Proyek ini dibangun dengan arsitektur *microservices* untuk menyediakan serangkaian layanan AI yang tangguh dan skalabel, dirancang untuk membantu penyandang disabilitas dalam aktivitas sehari-hari.
