@@ -3,7 +3,7 @@ FROM temandifa-python-base:latest AS builder
 
 # Menyalin dan menginstal dependensi khusus untuk layanan ini
 WORKDIR /app
-COPY ./ocr-service/requirements.txt .
+COPY ./ocr_service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 
@@ -20,7 +20,7 @@ RUN apt-get update && \
 COPY --from=builder /opt/venv /opt/venv
 
 # Menyalin kode aplikasi
-COPY ./ocr-service/ .
+COPY ./ocr_service/ .
 
 # Expose port dan jalankan aplikasi
 EXPOSE 5003

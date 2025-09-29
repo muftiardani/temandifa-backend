@@ -5,21 +5,17 @@ const errorHandler = require("../src/middleware/errorHandler");
 const axios = require("axios");
 const FormData = require("form-data");
 
-// Mock modul axios
 jest.mock("axios");
 
-// Buat aplikasi Express palsu untuk testing
 const app = express();
 app.use("/api/v1", apiV1Routes);
 app.use(errorHandler);
 
 describe("API Gateway Routes", () => {
-  // Hapus semua mock setelah setiap tes
   afterEach(() => {
     jest.clearAllMocks();
   });
 
-  // Tes untuk endpoint /detect
   test("POST /api/v1/detect should forward the request to the detector service", async () => {
     const mockResponse = { data: { result: "detection successful" } };
     axios.post.mockResolvedValue(mockResponse);
@@ -31,7 +27,6 @@ describe("API Gateway Routes", () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual(mockResponse.data);
 
-    // Memeriksa pemanggilan mock axios secara lebih detail
     expect(axios.post).toHaveBeenCalledTimes(1);
     const axiosCall = axios.post.mock.calls[0];
     expect(axiosCall[0]).toBe(process.env.DETECTOR_URL);
@@ -39,7 +34,6 @@ describe("API Gateway Routes", () => {
     expect(axiosCall[2]).toHaveProperty("headers");
   });
 
-  // Tes untuk endpoint /scan
   test("POST /api/v1/scan should forward the request to the scanner service", async () => {
     const mockResponse = { data: { result: "scan successful" } };
     axios.post.mockResolvedValue(mockResponse);
@@ -58,7 +52,6 @@ describe("API Gateway Routes", () => {
     expect(axiosCall[2]).toHaveProperty("headers");
   });
 
-  // Tes untuk endpoint /transcribe
   test("POST /api/v1/transcribe should forward the request to the transcriber service", async () => {
     const mockResponse = { data: { result: "transcription successful" } };
     axios.post.mockResolvedValue(mockResponse);
@@ -77,7 +70,6 @@ describe("API Gateway Routes", () => {
     expect(axiosCall[2]).toHaveProperty("headers");
   });
 
-  // Tes untuk kasus file tidak ditemukan
   test("POST /api/v1/detect without a file should return 400", async () => {
     const response = await request(app).post("/api/v1/detect");
 

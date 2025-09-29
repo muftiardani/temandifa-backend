@@ -1,22 +1,22 @@
 import pytest
-from app import app
 import io
+from voice_transcriber.app import app
 
 @pytest.fixture
 def client():
     app.config['TESTING'] = True
-    app.config['MODEL'] = None
     with app.test_client() as client:
         yield client
 
 def test_transcribe_success(client, mocker):
     """Test successful audio transcription."""
-    # Mock model whisper agar tidak perlu di-load
-    mocker.patch('app.model')
-    mocker.patch('app.model.transcribe', return_value={'text': 'Ini adalah hasil transkripsi.'})
+    mock_model = mocker.patch('voice_transcriber.app.get_whisper_model')
+    mock_model.return_value.transcribe.return_value = {'text': 'Ini adalah hasil transkripsi.'}
 
-    # Mock ffmpeg
-    mocker.patch('ffmpeg.run', return_value=(b'fake_audio_bytes', None))
+    mock_process = mocker.Mock()
+    mock_process.run.return_value = (b'fake_processed_audio_bytes', None)
+
+    mocker.patch('voice_transcriber.app.ffmpeg.input').return_value.output.return_value = mock_process
 
     data = {
         'audio': (io.BytesIO(b"fakeaudiodata"), 'test.mp3')

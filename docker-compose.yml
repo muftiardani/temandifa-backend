@@ -25,8 +25,8 @@ services:
 
   yolo-detector:
     build:
-      context: .
-      dockerfile: yolo-detector/Dockerfile
+      context: ./yolo_detector
+      dockerfile: yolo_detector/Dockerfile
     image: ${DOCKERHUB_USERNAME}/temandifa-yolo:latest
     environment:
       - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
@@ -37,7 +37,7 @@ services:
 
   voice-transcriber:
     build:
-      context: .
+      context: ./voice_transcriber
       dockerfile: voice_transcriber/Dockerfile
     image: ${DOCKERHUB_USERNAME}/temandifa-transcriber:latest
     environment:
@@ -49,8 +49,8 @@ services:
 
   ocr-service:
     build:
-      context: .
-      dockerfile: ocr-service/Dockerfile
+      context: ./ocr_service
+      dockerfile: ocr_service/Dockerfile
     image: ${DOCKERHUB_USERNAME}/temandifa-ocr:latest
     environment:
       - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
