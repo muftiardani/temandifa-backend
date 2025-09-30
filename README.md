@@ -64,8 +64,8 @@ Sebelum memulai, pastikan perangkat Anda telah terinstal:
     # Port untuk API Gateway
     PORT=3000
 
-    # Jumlah worker untuk Gunicorn (Rekomendasi: 2 * CPU Cores + 1)
-    GUNICORN_WORKERS=5
+    # Jumlah worker untuk Gunicorn
+    GUNICORN_WORKERS=2
 
     # URL Layanan Internal (Jangan diubah)
     DETECTOR_URL=http://yolo-detector:5001/detect

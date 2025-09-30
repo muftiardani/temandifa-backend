@@ -10,7 +10,7 @@ metrics = PrometheusMetrics(app)
 logging.basicConfig(level=logging.INFO)
 
 try:
-    model = whisper.load_model("base")
+    model = whisper.load_model("small")
     logging.info("Model Whisper berhasil dimuat.")
 except Exception as e:
     logging.error(f"Gagal memuat model Whisper: {e}")
