@@ -9,23 +9,16 @@ app = Flask(__name__)
 metrics = PrometheusMetrics(app)
 logging.basicConfig(level=logging.INFO)
 
-model = None
-
-def get_whisper_model():
-    """Fungsi untuk memuat model hanya saat dibutuhkan."""
-    global model
-    if model is None:
-        try:
-            model = whisper.load_model("base")
-            logging.info("Model Whisper berhasil dimuat.")
-        except Exception as e:
-            logging.error(f"Gagal memuat model Whisper: {e}")
-    return model
+try:
+    model = whisper.load_model("base")
+    logging.info("Model Whisper berhasil dimuat.")
+except Exception as e:
+    logging.error(f"Gagal memuat model Whisper: {e}")
+    model = None
 
 @app.route('/transcribe', methods=['POST'])
 def transcribe_audio():
-    whisper_model = get_whisper_model()
-    if whisper_model is None:
+    if model is None:
         return jsonify({'error': 'Model tidak tersedia'}), 500
 
     if 'audio' not in request.files:
@@ -45,7 +38,7 @@ def transcribe_audio():
         
         audio_np = np.frombuffer(out, np.int16).flatten().astype(np.float32) / 32768.0
 
-        result = whisper_model.transcribe(audio_np)
+        result = model.transcribe(audio_np)
         return jsonify({'transcribedText': result['text']})
     except ffmpeg.Error as e:
         logging.error(f"Error dari ffmpeg saat memproses audio: {e.stderr.decode('utf8')}")
@@ -56,7 +49,7 @@ def transcribe_audio():
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    if get_whisper_model():
+    if model:
         return jsonify({"status": "OK", "message": "Model is loaded."}), 200
     else:
         return jsonify({"status": "ERROR", "message": "Model is not loaded."}), 500

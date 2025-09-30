@@ -23,4 +23,4 @@ COPY --from=builder /opt/venv /opt/venv
 COPY . .
 
 EXPOSE 5003
-CMD gunicorn --bind 0.0.0.0:5003 --workers ${GUNICORN_WORKERS:-2} --timeout 300 --preload ocr-service.app:app
+CMD gunicorn --bind 0.0.0.0:5003 --workers ${GUNICORN_WORKERS:-2} --timeout 300 --preload ocr_service.app:app
