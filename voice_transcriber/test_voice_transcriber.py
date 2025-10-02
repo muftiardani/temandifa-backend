@@ -10,12 +10,11 @@ def client():
 
 def test_transcribe_success(client, mocker):
     """Test successful audio transcription."""
-    mock_model = mocker.patch('voice_transcriber.app.get_whisper_model')
-    mock_model.return_value.transcribe.return_value = {'text': 'Ini adalah hasil transkripsi.'}
+    mock_model = mocker.patch('voice_transcriber.app.model')
+    mock_model.transcribe.return_value = {'text': 'Ini adalah hasil transkripsi.'}
 
     mock_process = mocker.Mock()
     mock_process.run.return_value = (b'fake_processed_audio_bytes', None)
-
     mocker.patch('voice_transcriber.app.ffmpeg.input').return_value.output.return_value = mock_process
 
     data = {

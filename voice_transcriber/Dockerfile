@@ -23,4 +23,4 @@ COPY --from=builder /opt/venv /opt/venv
 COPY . .
 
 EXPOSE 5002
-CMD gunicorn --bind 0.0.0.0:5002 --workers ${GUNICORN_WORKERS:-2} --timeout 300 --preload voice_transcriber.app:app
+CMD gunicorn --bind 0.0.0.0:5002 --workers ${GUNICORN_WORKERS:-2} --timeout 300 --preload app:app
