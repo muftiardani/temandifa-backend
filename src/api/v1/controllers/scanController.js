@@ -18,6 +18,7 @@ exports.scanImage = asyncHandler(async (req, res) => {
   logger.info(`Meneruskan permintaan scan ke: ${SCANNER_URL}`);
   const response = await axios.post(SCANNER_URL, formData, {
     headers: formData.getHeaders(),
+    timeout: 300000,
   });
 
   res.status(200).json(response.data);

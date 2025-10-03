@@ -16,7 +16,7 @@ const fileFilter = (allowedMimeTypes) => (req, file, cb) => {
 
 exports.imageUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter: fileFilter(["image/jpeg", "image/png", "image/jpg"]),
 }).single("image");
 

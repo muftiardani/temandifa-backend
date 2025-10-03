@@ -18,6 +18,7 @@ exports.transcribeAudio = asyncHandler(async (req, res) => {
   logger.info(`Meneruskan permintaan transkripsi ke: ${TRANSCRIBER_URL}`);
   const response = await axios.post(TRANSCRIBER_URL, formData, {
     headers: formData.getHeaders(),
+    timeout: 300000,
   });
 
   res.status(200).json(response.data);

@@ -1,14 +1,14 @@
 from ultralytics import YOLO
 from PIL import Image
 
-def detect_objects_from_image(model, image_path):
-    results = model(image_path)
+def detect_objects_from_image(model, image_file_stream):
+    img = Image.open(image_file_stream)
+    
+    results = model(img)
 
     detections = []
     for r in results:
-        im_bgr = r.plot()
-        im_rgb = Image.fromarray(im_bgr[..., ::-1])
-        width, height = im_rgb.size
+        width, height = img.size
         
         for box in r.boxes:
             x1, y1, x2, y2 = box.xyxy[0]
