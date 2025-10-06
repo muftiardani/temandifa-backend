@@ -1,25 +1,29 @@
 const axios = require("axios");
 const FormData = require("form-data");
-const logger = require("../../../config/logger");
+const { serviceUrl } = require("../../../config/services");
 
-const TRANSCRIBER_URL = process.env.TRANSCRIBER_URL;
+const transcribe = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      const error = new Error("File audio tidak ditemukan.");
+      error.status = 400;
+      throw error;
+    }
 
-const asyncHandler = (fn) => (req, res, next) => {
-  return Promise.resolve(fn(req, res, next)).catch(next);
+    const formData = new FormData();
+    formData.append("audio", req.file.buffer, {
+      filename: req.file.originalname,
+      contentType: req.file.mimetype,
+    });
+
+    const response = await axios.post(serviceUrl.transcriber, formData, {
+      headers: formData.getHeaders(),
+    });
+
+    res.status(200).json(response.data);
+  } catch (error) {
+    next(error);
+  }
 };
 
-exports.transcribeAudio = asyncHandler(async (req, res) => {
-  const formData = new FormData();
-  formData.append("audio", req.file.buffer, {
-    filename: req.file.originalname,
-    contentType: req.file.mimetype,
-  });
-
-  logger.info(`Meneruskan permintaan transkripsi ke: ${TRANSCRIBER_URL}`);
-  const response = await axios.post(TRANSCRIBER_URL, formData, {
-    headers: formData.getHeaders(),
-    timeout: 300000,
-  });
-
-  res.status(200).json(response.data);
-});
+module.exports = { transcribe };

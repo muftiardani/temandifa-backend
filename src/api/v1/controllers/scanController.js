@@ -1,25 +1,29 @@
 const axios = require("axios");
 const FormData = require("form-data");
-const logger = require("../../../config/logger");
+const { serviceUrl } = require("../../../config/services");
 
-const SCANNER_URL = process.env.SCANNER_URL;
+const scan = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      const error = new Error("File gambar tidak ditemukan.");
+      error.status = 400;
+      throw error;
+    }
 
-const asyncHandler = (fn) => (req, res, next) => {
-  return Promise.resolve(fn(req, res, next)).catch(next);
+    const formData = new FormData();
+    formData.append("image", req.file.buffer, {
+      filename: req.file.originalname,
+      contentType: req.file.mimetype,
+    });
+
+    const response = await axios.post(serviceUrl.ocr, formData, {
+      headers: formData.getHeaders(),
+    });
+
+    res.status(200).json(response.data);
+  } catch (error) {
+    next(error);
+  }
 };
 
-exports.scanImage = asyncHandler(async (req, res) => {
-  const formData = new FormData();
-  formData.append("image", req.file.buffer, {
-    filename: req.file.originalname,
-    contentType: req.file.mimetype,
-  });
-
-  logger.info(`Meneruskan permintaan scan ke: ${SCANNER_URL}`);
-  const response = await axios.post(SCANNER_URL, formData, {
-    headers: formData.getHeaders(),
-    timeout: 300000,
-  });
-
-  res.status(200).json(response.data);
-});
+module.exports = { scan };
