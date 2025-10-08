@@ -4,21 +4,24 @@ services:
       context: .
       dockerfile: Dockerfile
     image: ${DOCKERHUB_USERNAME}/temandifa-gateway:latest
+    container_name: api-gateway
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:3000"
     env_file:
       - .env
     depends_on:
+      - mongo
       - yolo-detector
       - voice-transcriber
       - ocr-service
     networks:
       - temandifa-net
+    restart: unless-stopped
 
   python-base-builder:
     build:
-      context: .
-      dockerfile: base/Dockerfile
+      context: ./base
+      dockerfile: Dockerfile
     image: temandifa-python-base:latest
 
   yolo-detector:
@@ -26,48 +29,68 @@ services:
       context: ./yolo_detector
       dockerfile: Dockerfile
     image: ${DOCKERHUB_USERNAME}/temandifa-yolo:latest
+    container_name: yolo-detector
     environment:
       - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
     depends_on:
       - python-base-builder
     networks:
       - temandifa-net
+    restart: unless-stopped
 
   voice-transcriber:
     build:
       context: ./voice_transcriber
       dockerfile: Dockerfile
     image: ${DOCKERHUB_USERNAME}/temandifa-transcriber:latest
+    container_name: voice-transcriber
     environment:
       - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
     depends_on:
       - python-base-builder
     networks:
       - temandifa-net
+    restart: unless-stopped
 
   ocr-service:
     build:
       context: ./ocr_service
       dockerfile: Dockerfile
     image: ${DOCKERHUB_USERNAME}/temandifa-ocr:latest
+    container_name: ocr-service
     environment:
       - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
     depends_on:
       - python-base-builder
     networks:
       - temandifa-net
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:latest
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - temandifa-net
+    restart: unless-stopped
 
   prometheus:
     image: prom/prometheus:latest
+    container_name: prometheus
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
     networks:
       - temandifa-net
+    restart: unless-stopped
 
   grafana:
     image: grafana/grafana-oss:latest
+    container_name: grafana
     ports:
       - "4000:3000"
     volumes:
@@ -76,7 +99,11 @@ services:
       - prometheus
     networks:
       - temandifa-net
+    restart: unless-stopped
 
 networks:
   temandifa-net:
     driver: bridge
+
+volumes:
+  mongo-data:

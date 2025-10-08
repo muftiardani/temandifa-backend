@@ -3,125 +3,122 @@ const { v4: uuidv4 } = require("uuid");
 const {
   sendPushNotification,
 } = require("../../../services/notificationService");
+const logger = require("../../../config/logger");
+const User = require("../models/User");
 
-const usersDB = [
-  {
-    id: "user-1",
-    name: "User A",
-    phoneNumber: "111",
-    expoPushToken: "ExponentPushToken[qC_87IHW5F_NY--1ncBlz0]",
-  },
-  {
-    id: "user-2",
-    name: "User B",
-    phoneNumber: "222",
-    expoPushToken: "ExponentPushToken[jSaTDALV4Kt-LnX39Twxp5]",
-  },
-];
-const findUserByPhoneNumber = (phoneNumber) =>
-  usersDB.find((user) => user.phoneNumber === phoneNumber);
-const getAuthenticatedUser = (req) => usersDB[0];
+const AGORA_APP_ID = process.env.AGORA_APP_ID;
+const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE;
 
 const activeCalls = new Map();
-const APP_ID = process.env.AGORA_APP_ID;
-const APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE;
-const TOKEN_EXPIRATION_TIME_IN_SECONDS = 3600;
 
-const initiateCall = async (req, res, next) => {
+exports.initiateCall = async (req, res, next) => {
   try {
     const { calleePhoneNumber } = req.body;
-    const caller = getAuthenticatedUser(req);
+    const callerId = req.user.id;
 
-    if (!calleePhoneNumber) {
-      return res
-        .status(400)
-        .json({ message: "Nomor telepon tujuan diperlukan." });
-    }
-    if (!APP_ID || !APP_CERTIFICATE) {
-      throw new Error("Konfigurasi Agora tidak lengkap di server.");
-    }
-
-    const callee = findUserByPhoneNumber(calleePhoneNumber);
-    if (!callee || !callee.expoPushToken) {
+    const callee = await User.findOne({ phoneNumber: calleePhoneNumber });
+    if (!callee || !callee.pushToken) {
       return res.status(404).json({
-        message: "Pengguna tidak ditemukan atau tidak dapat dihubungi.",
+        message:
+          "Pengguna tujuan tidak ditemukan atau tidak dapat menerima panggilan.",
       });
     }
 
-    const channelName = uuidv4();
-    const callerUid = 1;
-    const calleeUid = 2;
+    const caller = await User.findById(callerId);
+    if (!caller) {
+      return res
+        .status(404)
+        .json({ message: "Data penelepon tidak ditemukan." });
+    }
 
-    const callerToken = RtcTokenBuilder.buildTokenWithUid(
-      APP_ID,
-      APP_CERTIFICATE,
+    const channelName = uuidv4();
+    const uidCaller = Math.floor(Math.random() * 100000);
+    const uidCallee = Math.floor(Math.random() * 100000);
+    const expirationTimeInSeconds = 3600;
+
+    const tokenCaller = RtcTokenBuilder.buildTokenWithUid(
+      AGORA_APP_ID,
+      AGORA_APP_CERTIFICATE,
       channelName,
-      callerUid,
+      uidCaller,
       RtcRole.PUBLISHER,
-      TOKEN_EXPIRATION_TIME_IN_SECONDS
+      expirationTimeInSeconds
     );
-    const calleeToken = RtcTokenBuilder.buildTokenWithUid(
-      APP_ID,
-      APP_CERTIFICATE,
+    const tokenCallee = RtcTokenBuilder.buildTokenWithUid(
+      AGORA_APP_ID,
+      AGORA_APP_CERTIFICATE,
       channelName,
-      calleeUid,
+      uidCallee,
       RtcRole.PUBLISHER,
-      TOKEN_EXPIRATION_TIME_IN_SECONDS
+      expirationTimeInSeconds
     );
 
     const callId = uuidv4();
     activeCalls.set(callId, {
       channelName,
-      caller,
-      callee,
-      calleeToken,
-      calleeUid,
+      callerId,
+      calleeId: callee._id.toString(),
+      tokens: {
+        [callerId]: { token: tokenCaller, uid: uidCaller },
+        [callee._id.toString()]: { token: tokenCallee, uid: uidCallee },
+      },
     });
 
     await sendPushNotification(
-      [callee.expoPushToken],
-      "Panggilan Video Masuk",
-      `Panggilan dari ${caller.name}`,
-      { callId, channelName, callerName: caller.name }
+      callee.pushToken,
+      "Panggilan Masuk",
+      `${caller.phoneNumber} sedang memanggil...`,
+      {
+        callId,
+        channelName,
+        callerName: caller.phoneNumber,
+      }
     );
 
-    res
-      .status(200)
-      .json({ callId, channelName, token: callerToken, uid: callerUid });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const answerCall = async (req, res, next) => {
-  try {
-    const { callId } = req.body;
-    const callDetails = activeCalls.get(callId);
-    if (!callDetails) {
-      return res
-        .status(404)
-        .json({ message: "Sesi panggilan tidak valid atau sudah berakhir." });
-    }
     res.status(200).json({
-      channelName: callDetails.channelName,
-      token: callDetails.calleeToken,
-      uid: callDetails.calleeUid,
+      callId,
+      channelName,
+      token: tokenCaller,
+      uid: uidCaller,
     });
   } catch (error) {
     next(error);
   }
 };
 
-const endCall = async (req, res, next) => {
+exports.answerCall = async (req, res, next) => {
+  try {
+    const { callId } = req.body;
+    const calleeId = req.user.id;
+
+    const call = activeCalls.get(callId);
+    if (!call || call.calleeId !== calleeId) {
+      return res
+        .status(404)
+        .json({ message: "Panggilan tidak ditemukan atau sudah berakhir." });
+    }
+
+    const calleeCredentials = call.tokens[calleeId];
+
+    res.status(200).json({
+      channelName: call.channelName,
+      token: calleeCredentials.token,
+      uid: calleeCredentials.uid,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.endCall = async (req, res, next) => {
   try {
     const { callId } = req.body;
     if (activeCalls.has(callId)) {
       activeCalls.delete(callId);
+      logger.info(`Panggilan ${callId} telah diakhiri.`);
     }
     res.status(200).json({ message: "Panggilan diakhiri." });
   } catch (error) {
     next(error);
   }
 };
-
-module.exports = { initiateCall, answerCall, endCall };

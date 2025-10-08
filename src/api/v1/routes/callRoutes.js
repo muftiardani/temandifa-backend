@@ -1,13 +1,15 @@
 const express = require("express");
-const router = express.Router();
 const {
   initiateCall,
   answerCall,
   endCall,
 } = require("../controllers/callController");
+const { protect } = require("../../../middleware/authMiddleware");
 
-router.post("/initiate", initiateCall);
-router.post("/answer", answerCall);
-router.post("/end", endCall);
+const router = express.Router();
+
+router.post("/initiate", protect, initiateCall);
+router.post("/answer", protect, answerCall);
+router.post("/end", protect, endCall);
 
 module.exports = router;

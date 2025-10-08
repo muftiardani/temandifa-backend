@@ -1,17 +1,23 @@
 const express = require("express");
-const router = express.Router();
-
-const { imageUpload, audioUpload } = require("../../../middleware/upload");
-
+const callRoutes = require("./callRoutes");
+const authRoutes = require("./authRoutes");
+const { upload } = require("../../../middleware/upload");
 const detectController = require("../controllers/detectController");
 const scanController = require("../controllers/scanController");
 const transcribeController = require("../controllers/transcribeController");
-const callRoutes = require("./callRoutes");
 
-router.post("/detect", imageUpload, detectController.detect);
-router.post("/scan", imageUpload, scanController.scan);
-router.post("/transcribe", audioUpload, transcribeController.transcribe);
+const router = express.Router();
+
+router.use("/auth", authRoutes);
 
 router.use("/call", callRoutes);
+
+router.post("/detect", upload.single("image"), detectController.proxyToYolo);
+router.post("/scan", upload.single("image"), scanController.proxyToOcr);
+router.post(
+  "/transcribe",
+  upload.single("audio"),
+  transcribeController.proxyToTranscriber
+);
 
 module.exports = router;

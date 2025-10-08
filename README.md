@@ -77,7 +77,9 @@ Sebelum memulai, pastikan perangkat Anda telah terinstal:
     Gunakan Docker Compose untuk membangun dan menjalankan semua layanan.
 
     ```bash
-    docker-compose up --build
+    docker-compose build python-base-builder
+    docker-compose --build
+    docker-compose up
     ```
 
     Tambahkan flag `-d` untuk menjalankannya di latar belakang.
