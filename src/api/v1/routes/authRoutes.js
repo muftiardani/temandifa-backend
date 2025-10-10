@@ -19,18 +19,4 @@ router.post("/refresh-token", authController.refreshToken);
 router.post("/forgotpassword", authController.forgotPassword);
 router.put("/resetpassword/:resetToken", authController.resetPassword);
 
-router.get(
-  "/google",
-  passport.authenticate("google", { scope: ["profile", "email"] })
-);
-
-router.get(
-  "/google/callback",
-  passport.authenticate("google", {
-    failureRedirect: "/login/failed",
-    session: false,
-  }),
-  authController.googleCallback
-);
-
 module.exports = router;

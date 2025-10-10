@@ -4,56 +4,19 @@ const crypto = require("crypto");
 
 const userSchema = new mongoose.Schema(
   {
-    username: {
-      type: String,
-      required: [true, "Username diperlukan"],
-      unique: true,
-      trim: true,
-    },
-    email: {
-      type: String,
-      required: [true, "Email diperlukan"],
-      unique: true,
-      lowercase: true,
-      trim: true,
-      match: [
-        /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
-        "Silakan masukkan email yang valid.",
-      ],
-    },
-    phoneNumber: {
-      type: String,
-      unique: true,
-      sparse: true,
-      trim: true,
-    },
-    password: {
-      type: String,
-      required: [
-        function () {
-          return !this.googleId;
-        },
-        "Password diperlukan",
-      ],
-      minlength: 6,
-      select: false,
-    },
-    googleId: {
-      type: String,
-    },
-    pushToken: {
-      type: String,
-    },
+    username: { type: String, required: true, unique: true, trim: true },
+    email: { type: String, required: true, unique: true, trim: true },
+    password: { type: String, select: false },
+    googleId: { type: String },
+    pushToken: { type: String },
     resetPasswordToken: String,
     resetPasswordExpire: Date,
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
 userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) {
+  if (!this.isModified("password") || !this.password) {
     return next();
   }
   const salt = await bcrypt.genSalt(10);
@@ -78,4 +41,6 @@ userSchema.methods.getResetPasswordToken = function () {
   return resetToken;
 };
 
-module.exports = mongoose.model("User", userSchema);
+const User = mongoose.model("User", userSchema);
+
+module.exports = User;
