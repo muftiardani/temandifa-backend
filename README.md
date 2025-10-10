@@ -1,49 +1,48 @@
 # TemanDifa Backend
 
-Selamat datang di repositori *backend* untuk aplikasi TemanDifa. Proyek ini dibangun dengan arsitektur *microservices* untuk menyediakan serangkaian layanan AI yang tangguh dan skalabel, dirancang untuk membantu penyandang disabilitas dalam aktivitas sehari-hari.
+Selamat datang di repositori *backend* untuk aplikasi **TemanDifa**. Sistem ini dibangun dengan arsitektur *microservices* menggunakan Node.js dan Python, dirancang untuk menjadi tangguh, skalabel, dan mudah dikelola menggunakan Docker.
 
-## 🚀 Arsitektur
+## ✨ Arsitektur & Fitur Utama
 
-Sistem ini terdiri dari beberapa layanan independen yang bekerja sama, diatur menggunakan Docker Compose.
+Backend ini terdiri dari beberapa layanan independen yang bekerja sama untuk menyediakan fungsionalitas aplikasi:
 
-  - **API Gateway**: Layanan utama yang ditulis dengan **Node.js (Express)** sebagai titik masuk tunggal untuk semua permintaan dari aplikasi klien. Bertugas untuk validasi, *rate limiting*, dan meneruskan permintaan ke layanan yang sesuai.
-  - **YOLO Detector**: Layanan deteksi objek berbasis **Python (Flask)** yang menggunakan model **YOLOv8** untuk mengidentifikasi objek secara real-time.
-  - **Voice Transcriber**: Layanan transkripsi suara ke teks berbasis **Python (Flask)** yang ditenagai oleh model **Whisper OpenAI**.
-  - **OCR Service**: Layanan *Optical Character Recognition* (OCR) berbasis **Python (Flask)** yang menggunakan **Tesseract** untuk mengekstrak teks dari gambar.
-  - **Prometheus & Grafana**: *Stack* pemantauan untuk mengumpulkan metrik kinerja dari semua layanan dan memvisualisasikannya dalam dasbor yang informatif.
+  - **API Gateway (Node.js & Express)**: Titik masuk tunggal untuk semua permintaan dari klien. Bertanggung jawab atas:
 
-## ✨ Fitur Utama
+      - Otentikasi pengguna (JWT & Google OAuth).
+      - Manajemen rute dan validasi permintaan.
+      - *Proxy* ke layanan *machine learning* internal.
+      - Manajemen panggilan video secara *real-time* dengan Socket.IO.
 
-  - **Endpoint Deteksi Objek**: Menerima gambar dan mengembalikan daftar objek yang terdeteksi beserta tingkat kepercayaan dan koordinatnya.
-  - **Endpoint Transkripsi Audio**: Menerima file audio dan mengembalikannya dalam format teks.
-  - **Endpoint Pemindaian Teks (OCR)**: Menerima gambar dan mengembalikan teks yang diekstrak dari gambar tersebut.
-  - **Terpusat & Aman**: Semua layanan diakses melalui API Gateway yang dilengkapi dengan *rate limiting* dan *security headers* (Helmet).
-  - **Pemantauan Terintegrasi**: Metrik kinerja diekspor secara otomatis ke Prometheus untuk dianalisis.
-  - **Otomatisasi CI/CD**: Alur kerja GitHub Actions untuk pengujian, pemindaian keamanan, *build* Docker, dan *deployment* otomatis.
+  - **Layanan Machine Learning (Python & Flask)**:
+
+      - **YOLO Detector**: Mendeteksi objek dari gambar menggunakan model YOLOv8.
+      - **Voice Transcriber**: Mengubah rekaman suara menjadi teks menggunakan model Whisper dari OpenAI.
+      - **OCR Service**: Mengekstrak teks dari gambar menggunakan Tesseract OCR.
+
+  - **Database & Caching**:
+
+      - **MongoDB**: Basis data utama untuk menyimpan data pengguna, kontak, dan token.
+      - **Redis**: Digunakan untuk manajemen status panggilan video secara *real-time*, memastikan persistensi dan keandalan sesi.
+
+  - **Pemantauan & Observability**:
+
+      - **Prometheus**: Mengumpulkan metrik kinerja dari semua layanan secara periodik.
+      - **Grafana**: Memvisualisasikan metrik dari Prometheus dalam dasbor yang mudah dibaca.
+
+  - **CI/CD Otomatis**:
+
+      - Alur kerja **GitHub Actions** untuk pengujian, pemindaian keamanan (*vulnerability scanning*), pembangunan *image* Docker, dan *deployment* otomatis ke server produksi.
 
 ## 🛠️ Tumpukan Teknologi
 
-| Komponen            | Teknologi                                                                                                                                                                                                                                                                                       |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **API Gateway** | [Node.js](https://nodejs.org/), [Express.js](https://expressjs.com/), [Winston](https://github.com/winstonjs/winston), [Helmet](https://helmetjs.github.io/), [Multer](https://github.com/expressjs/multer)                                                                                         |
-| **Layanan ML** | [Python](https://www.python.org/), [Flask](https://flask.palletsprojects.com/), [Gunicorn](https://gunicorn.org/)                                                                                                                                                                                  |
-| **Deteksi Objek** | [Ultralytics (YOLOv8)](https://docs.ultralytics.com/models/yolov8/)                                                                                                                                                                                                                                                |
-| **Transkripsi Suara** | [OpenAI Whisper](https://openai.com/research/whisper)                                                                                                                                                                                                                                           |
-| **OCR** | [Tesseract](https://github.com/tesseract-ocr/tesseract)                                                                                                                                                                                                                                         |
-| **Kontainerisasi** | [Docker](https://www.docker.com/), [Docker Compose](https://docs.docker.com/compose/)                                                                                                                                                                                                            |
-| **CI/CD** | [GitHub Actions](https://github.com/features/actions)                                                                                                                                                                                                                                           |
-| **Pengujian** | [Jest](https://jestjs.io/), [Supertest](https://github.com/visionmedia/supertest), [Pytest](https://docs.pytest.org/)                                                                                                                                                                            |
-| **Pemantauan** | [Prometheus](https://prometheus.io/), [Grafana](https://grafana.com/)                                                                                                                                                                                                                            |
-
-## 📋 Prasyarat
-
-Sebelum memulai, pastikan perangkat Anda telah terinstal:
-
-  - [Git](https://git-scm.com/)
-  - [Node.js](https://nodejs.org/en/) (v18 atau lebih baru)
-  - [Python](https://www.python.org/downloads/) (v3.9 atau lebih baru)
-  - [Docker](https://docs.docker.com/get-docker/)
-  - [Docker Compose](https://docs.docker.com/compose/install/)
+| Komponen | Teknologi |
+| --- | --- |
+| **API Gateway** | [Node.js](https://nodejs.org/), [Express](https://expressjs.com/), [JWT](https://jwt.io/), [Socket.IO](https://socket.io/), [Mongoose](https://mongoosejs.com/) |
+| **Layanan AI** | [Python](https://www.python.org/), [Flask](https://flask.palletsprojects.com/), [PyTorch](https://pytorch.org/) (YOLOv8), [Whisper](https://openai.com/research/whisper), [Tesseract](https://github.com/tesseract-ocr/tesseract) |
+| **Database** | [MongoDB](https://www.mongodb.com/), [Redis](https://redis.io/) |
+| **Infrastruktur** | [Docker](https://www.docker.com/), [Docker Compose](https://docs.docker.com/compose/) |
+| **Pemantauan** | [Prometheus](https://prometheus.io/), [Grafana](https://grafana.com/) |
+| **CI/CD** | [GitHub Actions](https://github.com/features/actions) |
 
 ## 🚀 Memulai
 
@@ -55,82 +54,59 @@ Sebelum memulai, pastikan perangkat Anda telah terinstal:
     ```
 
 2.  **Konfigurasi Variabel Lingkungan:**
-    Buat file `.env` di direktori utama. Anda bisa menyalin dari contoh jika tersedia, atau membuat file baru dengan konten berikut:
+    Salin file `.env.example` menjadi `.env` dan isi semua variabel yang diperlukan.
 
-    ```env
-    # Ganti dengan username Docker Hub Anda
-    DOCKERHUB_USERNAME=username_anda
-
-    # Port untuk API Gateway
-    PORT=3000
-
-    # Jumlah worker untuk Gunicorn
-    GUNICORN_WORKERS=2
-
-    # URL Layanan Internal (Jangan diubah)
-    DETECTOR_URL=http://yolo-detector:5001/detect
-    TRANSCRIBER_URL=http://voice-transcriber:5002/transcribe
-    SCANNER_URL=http://ocr-service:5003/scan
+    ```bash
+    cp .env.example .env
     ```
 
-3.  **Jalankan Semua Layanan:**
+    Pastikan Anda mengisi semua nilai, terutama untuk `JWT_SECRET`, kredensial Google, Agora, dan layanan email.
+
+3.  **Jalankan Aplikasi:**
     Gunakan Docker Compose untuk membangun dan menjalankan semua layanan.
 
     ```bash
+    # (Opsional tapi direkomendasikan) Bangun base image Python terlebih dahulu
     docker-compose build python-base-builder
-    docker-compose --build
-    docker-compose up
+
+    # Jalankan semua layanan di background
+    docker-compose up -d --build
     ```
 
-    Tambahkan flag `-d` untuk menjalankannya di latar belakang.
+    Aplikasi sekarang akan berjalan dan API Gateway akan tersedia di `http://localhost:3000` (atau *port* yang Anda tentukan di `.env`).
 
-Setelah semua kontainer berjalan, sistem siap digunakan.
-
-## 📡 Endpoint API
-
-Semua *endpoint* diakses melalui API Gateway.
-
-| Metode | Endpoint             | Deskripsi                               | Body (form-data)    |
-| ------ | -------------------- | --------------------------------------- | ------------------- |
-| `POST` | `/api/v1/detect`     | Mendeteksi objek dari sebuah gambar.    | `image`: file gambar |
-| `POST` | `/api/v1/scan`       | Mengekstrak teks dari sebuah gambar.    | `image`: file gambar |
-| `POST` | `/api/v1/transcribe` | Mentranskripsi teks dari sebuah audio.  | `audio`: file audio  |
-| `GET`  | `/health`            | Memeriksa status kesehatan API Gateway. | -                   |
-| `GET`  | `/metrics`           | Mengekspos metrik untuk Prometheus.     | -                   |
-
-## 🧪 Pengujian
-
-Proyek ini dilengkapi dengan pengujian otomatis untuk memastikan kualitas kode.
-
-  - **Menjalankan Tes Node.js (API Gateway):**
+4.  **Hentikan Aplikasi:**
 
     ```bash
-    npm install
-    npm test
+    docker-compose down
     ```
 
-  - **Menjalankan Tes Python (Layanan ML):**
+## 📜 Endpoint API (v1)
 
-    ```bash
-    # Pastikan semua dependensi terinstal
-    pip install -r base/requirements.txt
-    pip install -r yolo_detector/requirements.txt
-    pip install -r voice_transcriber/requirements.txt
-    pip install -r ocr_service/requirements.txt
+Semua *endpoint* berada di bawah *prefix* `/api/v1`. Rute yang ditandai dengan 🔒 memerlukan otentikasi JWT (*Bearer Token*).
 
-    # Jalankan pytest
-    pytest
-    ```
-
-## ⚙️ CI/CD
-
-Pipeline CI/CD diatur menggunakan **GitHub Actions**. Setiap *push* ke cabang `main` akan memicu alur kerja berikut:
-
-1.  **Test**: Menjalankan semua tes untuk Node.js dan Python.
-2.  **Build, Scan, and Push**: Membangun *image* Docker untuk setiap layanan, memindai kerentanan menggunakan Trivy, dan mendorongnya ke Docker Hub.
-3.  **Deploy**: Melakukan *deployment* otomatis ke server produksi menggunakan SSH.
-
-## 📊 Pemantauan
-
-  - **Prometheus**: Akses dasbor Prometheus di `http://localhost:9090`.
-  - **Grafana**: Akses dasbor Grafana di `http://localhost:4000` (login default: `admin`/`admin`). Grafana sudah terkonfigurasi dengan Prometheus sebagai sumber data.
+| Metode | Endpoint | Deskripsi | Status |
+| :--- | :--- | :--- | :--- |
+| **Otentikasi** | | | |
+| `POST` | `/auth/register` | Mendaftarkan pengguna baru. | ✅ Selesai |
+| `POST` | `/auth/login` | Login dengan email/username dan password. | ✅ Selesai |
+| `POST` | `/auth/google/mobile` | Login atau mendaftar menggunakan token Google. | ✅ Selesai |
+| `POST` | `/auth/refresh-token` | Memperbarui *access token* menggunakan *refresh token*. | ✅ Selesai |
+| `POST` | `/auth/forgotpassword` | Mengirim email untuk reset kata sandi. | ✅ Selesai |
+| `PUT` | `/auth/resetpassword/:token`| Mereset kata sandi menggunakan token. | ✅ Selesai |
+| `POST` | `/auth/logout` | Menghapus *refresh token* dari database. | ✅ Selesai |
+| **Pengguna** | | | |
+| `PUT` | `/users/pushtoken` 🔒 | Memperbarui *push notification token* pengguna. | ✅ Selesai |
+| **Fitur AI** | | | |
+| `POST` | `/detect` 🔒 | Mengunggah gambar untuk deteksi objek. | ✅ Selesai |
+| `POST` | `/scan` 🔒 | Mengunggah gambar untuk ekstraksi teks (OCR). | ✅ Selesai |
+| `POST` | `/transcribe` 🔒 | Mengunggah audio untuk transkripsi suara. | ✅ Selesai |
+| **Panggilan Video** | | | |
+| `POST` | `/call/initiate` 🔒 | Memulai panggilan video ke pengguna lain. | ✅ Selesai |
+| `POST` | `/call/:callId/answer` 🔒 | Menjawab panggilan yang masuk. | ✅ Selesai |
+| `POST` | `/call/:callId/end` 🔒 | Mengakhiri/menolak/membatalkan panggilan. | ✅ Selesai |
+| `GET` | `/call/status` 🔒 | Memeriksa status panggilan aktif pengguna. | ✅ Selesai |
+| **Kontak Darurat** | | | |
+| `GET` | `/contacts` 🔒 | Mendapatkan daftar kontak darurat pengguna. | ✅ Selesai |
+| `POST` | `/contacts` 🔒 | Menambahkan kontak darurat baru. | ✅ Selesai |
+| `DELETE`| `/contacts/:id` 🔒 | Menghapus kontak darurat. | ✅ Selesai |
