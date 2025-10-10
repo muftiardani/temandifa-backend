@@ -10,7 +10,7 @@ metrics = PrometheusMetrics(app)
 logging.basicConfig(level=logging.INFO)
 
 try:
-    model = YOLO('yolov8l.pt')
+    model = YOLO('yolov8n.pt')
     logging.info("Model YOLO berhasil dimuat.")
 except Exception as e:
     logging.error(f"Gagal memuat model YOLO: {e}")

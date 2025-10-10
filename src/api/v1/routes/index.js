@@ -12,6 +12,8 @@ router.use("/auth", authRoutes);
 
 router.use("/call", callRoutes);
 
+router.use("/contacts", contactRoutes);
+
 router.post("/detect", upload.single("image"), detectController.proxyToYolo);
 router.post("/scan", upload.single("image"), scanController.proxyToOcr);
 router.post(

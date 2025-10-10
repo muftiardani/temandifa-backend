@@ -1,19 +1,23 @@
 const express = require("express");
-const passport = require("passport");
-const {
-  register,
-  login,
-  forgotPassword,
-  resetPassword,
-  googleCallback,
-} = require("../controllers/authController");
-
 const router = express.Router();
+const passport = require("passport");
+const authController = require("../controllers/authController");
+const {
+  userValidationRules,
+  validate,
+} = require("../../../middleware/validators");
 
-router.post("/register", register);
-router.post("/login", login);
-router.post("/forgotpassword", forgotPassword);
-router.put("/resetpassword/:resettoken", resetPassword);
+router.post(
+  "/register",
+  userValidationRules(),
+  validate,
+  authController.register
+);
+router.post("/login", authController.login);
+router.post("/logout", authController.logout);
+router.post("/refresh-token", authController.refreshToken);
+router.post("/forgotpassword", authController.forgotPassword);
+router.put("/resetpassword/:resetToken", authController.resetPassword);
 
 router.get(
   "/google",
@@ -22,8 +26,11 @@ router.get(
 
 router.get(
   "/google/callback",
-  passport.authenticate("google", { failureRedirect: "/", session: false }),
-  googleCallback
+  passport.authenticate("google", {
+    failureRedirect: "/login/failed",
+    session: false,
+  }),
+  authController.googleCallback
 );
 
 module.exports = router;
