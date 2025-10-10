@@ -1,12 +1,84 @@
 services:
-  mongodb:
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: temandifa_api_gateway
+    restart: unless-stopped
+    ports:
+      - "${PORT}:${PORT}"
+    env_file:
+      - .env
+    depends_on:
+      - mongo
+      - redis
+      - yolo-detector
+      - voice-transcriber
+      - ocr-service
+    networks:
+      - temandifa-net
+
+  python-base-builder:
+    build:
+      context: ./base
+      dockerfile: Dockerfile
+    image: temandifa-python-base:latest
+
+  yolo-detector:
+    build:
+      context: ./yolo_detector
+      dockerfile: Dockerfile
+    container_name: yolo-detector
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    env_file:
+      - .env
+    depends_on:
+      - python-base-builder
+    networks:
+      - temandifa-net
+
+  voice-transcriber:
+    build:
+      context: ./voice_transcriber
+      dockerfile: Dockerfile
+    container_name: voice-transcriber
+    restart: unless-stopped
+    ports:
+      - "5002:5002"
+    env_file:
+      - .env
+    depends_on:
+      - python-base-builder
+    networks:
+      - temandifa-net
+
+  ocr-service:
+    build:
+      context: ./ocr_service
+      dockerfile: Dockerfile
+    container_name: ocr-service
+    restart: unless-stopped
+    ports:
+      - "5003:5003"
+    env_file:
+      - .env
+    depends_on:
+      - python-base-builder
+    networks:
+      - temandifa-net
+
+  mongo:
     image: mongo:latest
     container_name: temandifa_mongodb
     restart: unless-stopped
     ports:
       - "27017:27017"
     volumes:
-      - mongo_data:/data/db
+      - mongo-data:/data/db
+    networks:
+      - temandifa-net
 
   redis:
     image: "redis:alpine"
@@ -15,49 +87,9 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - redis_data:/data
-
-  api:
-    build: .
-    container_name: temandifa_api
-    restart: unless-stopped
-    ports:
-      - "${PORT}:${PORT}"
-    env_file:
-      - .env
-    depends_on:
-      - mongodb
-      - redis
-    volumes:
-      - .:/app
-      - /app/node_modules
-
-  yolo_detector:
-    build: ./yolo_detector
-    container_name: temandifa_yolo_detector
-    restart: unless-stopped
-    ports:
-      - "5001:5001"
-    env_file:
-      - .env
-
-  ocr_service:
-    build: ./ocr_service
-    container_name: temandifa_ocr_service
-    restart: unless-stopped
-    ports:
-      - "5002:5002"
-    env_file:
-      - .env
-
-  voice_transcriber:
-    build: ./voice_transcriber
-    container_name: temandifa_voice_transcriber
-    restart: unless-stopped
-    ports:
-      - "5003:5003"
-    env_file:
-      - .env
+      - redis-data:/data
+    networks:
+      - temandifa-net
 
   prometheus:
     image: prom/prometheus:latest
@@ -66,19 +98,29 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus:/etc/prometheus
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    networks:
+      - temandifa-net
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana-oss:latest
     container_name: temandifa_grafana
     restart: unless-stopped
     ports:
       - "4000:3000"
     volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+    networks:
+      - temandifa-net
+
+networks:
+  temandifa-net:
+    driver: bridge
 
 volumes:
-  mongo_data:
-  redis_data:
+  mongo-data:
+  redis-data:

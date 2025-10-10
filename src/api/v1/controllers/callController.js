@@ -10,18 +10,18 @@ const APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE;
 const CALL_EXPIRATION_SECONDS = 3600;
 
 const setCallData = async (callId, data) => {
-  await redisClient.set(callId, JSON.stringify(data), {
+  await redisClient.set(`call:${callId}`, JSON.stringify(data), {
     EX: CALL_EXPIRATION_SECONDS,
   });
 };
 
 const getCallData = async (callId) => {
-  const data = await redisClient.get(callId);
+  const data = await redisClient.get(`call:${callId}`);
   return data ? JSON.parse(data) : null;
 };
 
 const deleteCallData = async (callId) => {
-  await redisClient.del(callId);
+  await redisClient.del(`call:${callId}`);
 };
 
 // @desc    Initiate a video call
@@ -43,6 +43,12 @@ exports.initiateCall = async (req, res, next) => {
       return res
         .status(404)
         .json({ message: "Pengguna tujuan tidak ditemukan" });
+    }
+
+    if (caller.id === callee.id) {
+      return res
+        .status(400)
+        .json({ message: "Anda tidak dapat menelepon diri sendiri" });
     }
 
     if (!callee.pushToken) {
@@ -184,11 +190,11 @@ exports.endCall = async (req, res, next) => {
 // @access  Private
 exports.getCallStatus = async (req, res, next) => {
   try {
-    const keys = await redisClient.keys("call_*");
+    const keys = await redisClient.keys("call:*");
     const currentUserId = req.user.id.toString();
 
     for (const key of keys) {
-      const callData = await getCallData(key);
+      const callData = await getCallData(key.replace("call:", ""));
       if (
         callData &&
         (callData.caller.id.toString() === currentUserId ||
