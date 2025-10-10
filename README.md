@@ -54,13 +54,38 @@ Backend ini terdiri dari beberapa layanan independen yang bekerja sama untuk men
     ```
 
 2.  **Konfigurasi Variabel Lingkungan:**
-    Salin file `.env.example` menjadi `.env` dan isi semua variabel yang diperlukan.
+    Buat file `.env` di direktori utama. Anda bisa menyalin dari contoh jika tersedia, atau membuat file baru dengan konten berikut:
 
-    ```bash
-    cp .env.example .env
-    ```
-
-    Pastikan Anda mengisi semua nilai, terutama untuk `JWT_SECRET`, kredensial Google, Agora, dan layanan email.
+    | Variabel | Deskripsi | Contoh Nilai |
+    | :--- | :--- | :--- |
+    | **Konfigurasi Server** | | |
+    | `PORT` | Port tempat API Gateway akan berjalan. | `3000` |
+    | `DOCKERHUB_USERNAME` | Nama pengguna Docker Hub untuk proses CI/CD. | `mufti_ardani` |
+    | `GUNICORN_WORKERS` | Jumlah proses *worker* Gunicorn untuk layanan Python. | `4` |
+    | **Database** | | |
+    | `MONGO_URI` | URI koneksi ke MongoDB. Gunakan nama layanan dari `docker-compose`. | `mongodb://mongo:27017/temandifa_db` |
+    | **Keamanan (JWT)** | | |
+    | `JWT_SECRET` | Kunci rahasia untuk menandatangani *Access Token* JWT. | `your_super_secret_jwt_key` |
+    | `JWT_REFRESH_SECRET` | Kunci rahasia untuk menandatangani *Refresh Token* JWT. | `your_other_super_secret_jwt_key` |
+    | **Kredensial Google OAuth**| | |
+    | `GOOGLE_CLIENT_ID` | Client ID dari Google Cloud Console untuk otentikasi. | `xxxxxxxx.apps.googleusercontent.com` |
+    | `GOOGLE_CLIENT_SECRET`| Client Secret dari Google Cloud Console. | `GOCSPX-xxxxxxxxxxxx` |
+    | **Layanan Email** | | |
+    | `EMAIL_FROM` | Alamat email pengirim untuk fitur lupa kata sandi. | `"TemanDifa <no-reply@temandifa.com>"` |
+    | `EMAIL_HOST` | Host SMTP server (misalnya, `smtp.gmail.com`). | `smtp.gmail.com` |
+    | `EMAIL_PORT` | Port SMTP server (misalnya, `465` untuk SSL). | `465` |
+    | `EMAIL_USER` | Nama pengguna untuk otentikasi SMTP. | `your-email@gmail.com` |
+    | `EMAIL_PASS` | Kata sandi aplikasi (jika menggunakan Gmail) untuk SMTP. | `your_app_password` |
+    | **Kredensial Agora** | | |
+    | `AGORA_APP_ID` | App ID dari proyek Agora Anda. | `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
+    | `AGORA_APP_CERTIFICATE`| App Certificate dari proyek Agora Anda. | `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
+    | **URL Microservice** | | |
+    | `YOLO_DETECTOR_URL` | URL internal untuk layanan deteksi objek YOLO. | `http://yolo-detector:5001` |
+    | `VOICE_TRANSCRIBER_URL`| URL internal untuk layanan transkripsi suara. | `http://voice-transcriber:5002` |
+    | `OCR_SERVICE_URL` | URL internal untuk layanan OCR. | `http://ocr-service:5003` |
+    | **Konfigurasi Frontend** | | |
+    | `FRONTEND_URL` | URL dasar aplikasi *frontend* (untuk link reset password). | `http://localhost:8081` |
+    | `CORS_ORIGIN` | URL *frontend* yang diizinkan untuk membuat permintaan ke API. | `http://localhost:8081` |
 
 3.  **Jalankan Aplikasi:**
     Gunakan Docker Compose untuk membangun dan menjalankan semua layanan.
