@@ -60,7 +60,7 @@ Backend ini terdiri dari beberapa layanan independen yang bekerja sama untuk men
     | :--- | :--- | :--- |
     | **Konfigurasi Server** | | |
     | `PORT` | Port tempat API Gateway akan berjalan. | `3000` |
-    | `DOCKERHUB_USERNAME` | Nama pengguna Docker Hub untuk proses CI/CD. | `mufti_ardani` |
+    | `DOCKERHUB_USERNAME` | Nama pengguna Docker Hub untuk proses CI/CD. | `username_anda` |
     | `GUNICORN_WORKERS` | Jumlah proses *worker* Gunicorn untuk layanan Python. | `4` |
     | **Database** | | |
     | `MONGO_URI` | URI koneksi ke MongoDB. Gunakan nama layanan dari `docker-compose`. | `mongodb://mongo:27017/temandifa_db` |
