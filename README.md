@@ -91,7 +91,7 @@ Backend ini terdiri dari beberapa layanan independen yang bekerja sama untuk men
     Gunakan Docker Compose untuk membangun dan menjalankan semua layanan.
 
     ```bash
-    # (Opsional tapi direkomendasikan) Bangun base image Python terlebih dahulu
+    # Bangun base image Python terlebih dahulu
     docker-compose build python-base-builder
 
     # Jalankan semua layanan di background
