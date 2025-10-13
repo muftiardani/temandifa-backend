@@ -1,22 +1,28 @@
 const express = require("express");
-const router = express.Router();
-const passport = require("passport");
 const authController = require("../controllers/authController");
 const {
-  userValidationRules,
   validate,
+  registerSchema,
+  loginSchema,
 } = require("../../../middleware/validators");
+const passport = require("passport");
 
-router.post(
-  "/register",
-  userValidationRules(),
-  validate,
-  authController.register
-);
-router.post("/login", authController.login);
-router.post("/logout", authController.logout);
+const router = express.Router();
+
+router.post("/register", validate(registerSchema), authController.register);
+router.post("/login", validate(loginSchema), authController.login);
+
 router.post("/refresh-token", authController.refreshToken);
+router.post("/logout", authController.logout);
 router.post("/forgotpassword", authController.forgotPassword);
-router.put("/resetpassword/:resetToken", authController.resetPassword);
+router.post("/google/mobile", authController.loginWithGoogle);
+
+router.get(
+  "/profile",
+  passport.authenticate("jwt", { session: false }),
+  (req, res) => {
+    res.json({ user: req.user });
+  }
+);
 
 module.exports = router;

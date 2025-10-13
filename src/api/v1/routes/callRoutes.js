@@ -1,30 +1,34 @@
 const express = require("express");
 const router = express.Router();
+const callController = require("../controllers/callController");
 const {
-  initiateCall,
-  answerCall,
-  endCall,
-  getCallStatus,
-} = require("../controllers/callController");
-const { protect } = require("../../../middleware/authMiddleware");
+  validate,
+  initiateCallSchema,
+  callIdSchema,
+} = require("../../../middleware/validators");
+const passport = require("passport");
 
-// Melindungi semua rute di bawah ini, memastikan hanya pengguna terotentikasi yang dapat mengakses
-router.use(protect);
+// Melindungi semua rute panggilan dengan otentikasi JWT
+router.use(passport.authenticate("jwt", { session: false }));
 
-// @route   POST /api/v1/call/initiate
-// Inisiasi panggilan ke nomor telepon lain
-router.post("/initiate", initiateCall);
+// Rute untuk memulai panggilan
+router.post(
+  "/initiate",
+  validate(initiateCallSchema),
+  callController.initiateCall
+);
 
-// @route   POST /api/v1/call/:callId/answer
-// Menjawab panggilan yang masuk
-router.post("/:callId/answer", answerCall);
+// Rute untuk mendapatkan status panggilan
+router.get("/status", callController.getCallStatus);
 
-// @route   POST /api/v1/call/:callId/end
-// Mengakhiri, menolak, atau membatalkan panggilan
-router.post("/:callId/end", endCall);
+// Rute untuk menjawab panggilan (menggunakan parameter callId)
+router.post(
+  "/:callId/answer",
+  validate(callIdSchema),
+  callController.answerCall
+);
 
-// @route   GET /api/v1/call/status
-// Memeriksa apakah pengguna sedang dalam panggilan aktif
-router.get("/status", getCallStatus);
+// Rute untuk mengakhiri panggilan (menggunakan parameter callId)
+router.post("/:callId/end", validate(callIdSchema), callController.endCall);
 
 module.exports = router;

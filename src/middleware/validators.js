@@ -1,42 +1,100 @@
-const { body, validationResult } = require("express-validator");
+const { z } = require("zod");
 
-const userValidationRules = () => {
-  return [
-    body("email").isEmail().withMessage("Format email tidak valid"),
-    body("password")
-      .isLength({ min: 8 })
-      .withMessage("Password minimal 8 karakter")
-      .matches(/\d/)
-      .withMessage("Password harus mengandung angka")
-      .matches(/[a-z]/)
-      .withMessage("Password harus mengandung huruf kecil")
-      .matches(/[A-Z]/)
-      .withMessage("Password harus mengandung huruf besar")
-      .matches(/[!@#$%^&*(),.?":{}|<>]/)
-      .withMessage("Password harus mengandung setidaknya satu simbol"),
-    body("username")
-      .not()
-      .isEmpty()
-      .withMessage("Username tidak boleh kosong")
-      .isLength({ min: 3 })
-      .withMessage("Username minimal 3 karakter"),
-  ];
-};
-
-const validate = (req, res, next) => {
-  const errors = validationResult(req);
-  if (errors.isEmpty()) {
-    return next();
+/**
+ * Middleware generik untuk memvalidasi permintaan (request) menggunakan skema Zod.
+ * Jika validasi gagal, middleware akan mengirim respons error 400.
+ * @param {z.Schema} schema - Skema Zod yang akan digunakan untuk validasi.
+ */
+const validate = (schema) => (req, res, next) => {
+  try {
+    schema.parse({
+      body: req.body,
+      query: req.query,
+      params: req.params,
+    });
+    next();
+  } catch (error) {
+    return res.status(400).json({
+      errors: error.errors.map((err) => ({
+        msg: err.message,
+        path: err.path.join("."),
+      })),
+    });
   }
-  const extractedErrors = [];
-  errors.array().map((err) => extractedErrors.push({ [err.path]: err.msg }));
-
-  return res.status(422).json({
-    errors: extractedErrors,
-  });
 };
+
+// Skema untuk registrasi pengguna baru
+const registerSchema = z.object({
+  body: z.object({
+    email: z
+      .string({ required_error: "Email diperlukan" })
+      .email("Format email tidak valid."),
+    password: z
+      .string({ required_error: "Password diperlukan" })
+      .min(8, "Password minimal harus 8 karakter.")
+      .regex(/[a-z]/, "Password harus mengandung setidaknya satu huruf kecil.")
+      .regex(/[A-Z]/, "Password harus mengandung setidaknya satu huruf besar.")
+      .regex(/[0-9]/, "Password harus mengandung setidaknya satu angka.")
+      .regex(
+        /[^a-zA-Z0-9]/,
+        "Password harus mengandung setidaknya satu simbol."
+      ),
+  }),
+});
+
+// Skema untuk login pengguna
+const loginSchema = z.object({
+  body: z.object({
+    login: z.string({ required_error: "Login (email/username) diperlukan." }),
+    password: z.string({ required_error: "Password diperlukan." }),
+  }),
+});
+
+// Skema untuk menambah kontak baru
+const contactSchema = z.object({
+  body: z.object({
+    name: z
+      .string({ required_error: "Nama kontak diperlukan." })
+      .min(1, "Nama tidak boleh kosong."),
+    phoneNumber: z
+      .string({ required_error: "Nomor telepon diperlukan." })
+      .min(10, "Nomor telepon tidak valid."),
+  }),
+});
+
+// Skema untuk memperbarui push token
+const pushTokenSchema = z.object({
+  body: z.object({
+    token: z
+      .string({ required_error: "Token diperlukan." })
+      .min(1, "Token tidak boleh kosong."),
+  }),
+});
+
+// Skema untuk memulai panggilan
+const initiateCallSchema = z.object({
+  body: z.object({
+    calleePhoneNumber: z
+      .string({ required_error: "Nomor telepon tujuan diperlukan." })
+      .min(10, "Nomor telepon tujuan tidak valid."),
+  }),
+});
+
+// Skema untuk memvalidasi parameter callId (format ObjectId MongoDB)
+const callIdSchema = z.object({
+  params: z.object({
+    callId: z
+      .string()
+      .regex(/^[0-9a-fA-F]{24}$/, "Format Call ID tidak valid."),
+  }),
+});
 
 module.exports = {
-  userValidationRules,
   validate,
+  registerSchema,
+  loginSchema,
+  contactSchema,
+  pushTokenSchema,
+  initiateCallSchema,
+  callIdSchema,
 };

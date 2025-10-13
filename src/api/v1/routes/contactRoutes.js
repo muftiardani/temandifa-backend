@@ -1,17 +1,17 @@
 const express = require("express");
-const {
-  getContacts,
-  addContact,
-  deleteContact,
-} = require("../controllers/contactController");
-const { protect } = require("../../../middleware/authMiddleware");
-
 const router = express.Router();
+const contactController = require("../controllers/contactController");
+const { validate, contactSchema } = require("../../../middleware/validators");
+const passport = require("passport");
 
-router.use(protect);
+// Lindungi semua rute kontak dengan otentikasi JWT
+router.use(passport.authenticate("jwt", { session: false }));
 
-router.route("/").get(getContacts).post(addContact);
+router
+  .route("/")
+  .get(contactController.getContacts)
+  .post(validate(contactSchema), contactController.addContact);
 
-router.route("/:id").delete(deleteContact);
+router.route("/:id").delete(contactController.deleteContact);
 
 module.exports = router;
