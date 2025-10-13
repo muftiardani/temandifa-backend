@@ -2,7 +2,7 @@ const User = require("../models/User");
 const Token = require("../models/Token");
 const jwt = require("jsonwebtoken");
 const passport = require("passport");
-const { sendPasswordResetEmail } = require("../../services/emailService");
+const { sendPasswordResetEmail } = require("../../../services/emailService");
 const crypto = require("crypto");
 
 const generateTokens = async (user) => {

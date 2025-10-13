@@ -3,10 +3,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: temandifa_api_gateway
+    container_name: api-gateway
     restart: unless-stopped
     ports:
-      - "${PORT}:${PORT}"
+      - "3000:3000"
     env_file:
       - .env
     depends_on:
