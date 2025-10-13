@@ -50,15 +50,16 @@ const loginSchema = z.object({
   }),
 });
 
-// Skema untuk menambah kontak baru
+// Skema untuk membuat kontak baru
 const contactSchema = z.object({
   body: z.object({
-    name: z
-      .string({ required_error: "Nama kontak diperlukan." })
-      .min(1, "Nama tidak boleh kosong."),
+    name: z.string().min(1, "Nama tidak boleh kosong"),
     phoneNumber: z
-      .string({ required_error: "Nomor telepon diperlukan." })
-      .min(10, "Nomor telepon tidak valid."),
+      .string()
+      .regex(
+        /^\+[1-9]\d{1,14}$/,
+        "Format nomor telepon tidak valid. Gunakan format internasional, contoh: +628123456789"
+      ),
   }),
 });
 
@@ -75,8 +76,11 @@ const pushTokenSchema = z.object({
 const initiateCallSchema = z.object({
   body: z.object({
     calleePhoneNumber: z
-      .string({ required_error: "Nomor telepon tujuan diperlukan." })
-      .min(10, "Nomor telepon tujuan tidak valid."),
+      .string()
+      .regex(
+        /^\+[1-9]\d{1,14}$/,
+        "Format nomor telepon tidak valid. Gunakan format internasional, contoh: +628123456789"
+      ),
   }),
 });
 
