@@ -1,14 +1,23 @@
 const User = require("../models/User");
 const Token = require("../models/Token");
 const jwt = require("jsonwebtoken");
-const passport = require("passport");
 const { sendPasswordResetEmail } = require("../../../services/emailService");
 const crypto = require("crypto");
+const logger = require("../../../config/logger");
 
+/**
+ * Fungsi helper untuk membuat access dan refresh token.
+ * @param {object} user - Objek pengguna dari Mongoose.
+ * @returns {Promise<{accessToken: string, refreshToken: string}>}
+ */
 const generateTokens = async (user) => {
-  const accessToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-    expiresIn: "15m",
-  });
+  const accessToken = jwt.sign(
+    { id: user._id, email: user.email },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: "15m",
+    }
+  );
   const refreshToken = jwt.sign(
     { id: user._id },
     process.env.JWT_REFRESH_SECRET,
@@ -33,6 +42,11 @@ exports.register = async (req, res, next) => {
     const tokens = await generateTokens(user);
     res.status(201).json(tokens);
   } catch (error) {
+    if (error.code === 11000) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Email sudah terdaftar." });
+    }
     next(error);
   }
 };
@@ -81,13 +95,18 @@ exports.googleAuthCallback = async (req, res, next) => {
 // @route   POST /api/v1/auth/forgotpassword
 // @access  Public
 exports.forgotPassword = async (req, res, next) => {
+  let user;
   try {
-    const user = await User.findOne({ email: req.body.email });
+    user = await User.findOne({ email: req.body.email });
 
     if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Email tidak terdaftar" });
+      logger.warn(
+        `Permintaan reset password untuk email tidak terdaftar: ${req.body.email}`
+      );
+      return res.status(200).json({
+        success: true,
+        data: "Jika email terdaftar, instruksi reset akan dikirim.",
+      });
     }
 
     const resetToken = user.getResetPasswordToken();
@@ -95,23 +114,22 @@ exports.forgotPassword = async (req, res, next) => {
 
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
-    try {
-      await sendPasswordResetEmail(user.email, resetUrl);
-      res.status(200).json({
-        success: true,
-        data: "Email untuk reset kata sandi telah dikirim",
-      });
-    } catch (error) {
-      console.error(error);
+    await sendPasswordResetEmail(user.email, resetUrl);
+
+    res.status(200).json({
+      success: true,
+      data: "Email untuk reset kata sandi telah dikirim",
+    });
+  } catch (error) {
+    logger.error("Gagal mengirim email reset password:", error);
+    if (user) {
       user.resetPasswordToken = undefined;
       user.resetPasswordExpire = undefined;
       await user.save({ validateBeforeSave: false });
-      return res
-        .status(500)
-        .json({ success: false, message: "Gagal mengirim email" });
     }
-  } catch (error) {
-    next(error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Gagal mengirim email" });
   }
 };
 
@@ -180,6 +198,15 @@ exports.refreshToken = async (req, res, next) => {
     const tokens = await generateTokens(user);
     res.status(200).json(tokens);
   } catch (error) {
+    if (
+      error.name === "JsonWebTokenError" ||
+      error.name === "TokenExpiredError"
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "Refresh token tidak valid atau kedaluwarsa.",
+      });
+    }
     next(error);
   }
 };

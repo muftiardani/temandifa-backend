@@ -93,6 +93,27 @@ const callIdSchema = z.object({
   }),
 });
 
+// Skema untuk meminta reset password
+const forgotPasswordSchema = z.object({
+  body: z.object({
+    email: z
+      .string({ required_error: "Email diperlukan" })
+      .email("Format email tidak valid."),
+  }),
+});
+
+// Skema untuk melakukan reset password
+const resetPasswordSchema = z.object({
+  params: z.object({
+    token: z.string().min(1, "Token diperlukan."),
+  }),
+  body: z.object({
+    password: z
+      .string({ required_error: "Password baru diperlukan" })
+      .min(8, "Password baru minimal harus 8 karakter."),
+  }),
+});
+
 module.exports = {
   validate,
   registerSchema,
@@ -101,4 +122,6 @@ module.exports = {
   pushTokenSchema,
   initiateCallSchema,
   callIdSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
 };
