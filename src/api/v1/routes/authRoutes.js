@@ -1,5 +1,4 @@
 const express = require("express");
-const passport = require("passport");
 const authController = require("../controllers/authController");
 const {
   validate,
@@ -8,16 +7,23 @@ const {
   forgotPasswordSchema,
   resetPasswordSchema,
 } = require("../../../middleware/validators");
+const passport = require("passport");
+
 const router = express.Router();
 
 router.post("/register", validate(registerSchema), authController.register);
 router.post("/login", validate(loginSchema), authController.login);
-router.post("/logout", authController.logout);
 router.post("/refresh-token", authController.refreshToken);
-router.post(
-  "/google/mobile",
-  passport.authenticate("google-token", { session: false }),
-  authController.loginWithGoogle
+router.post("/logout", authController.logout);
+
+router.post("/google/mobile", authController.googleAuthCallback);
+
+router.get(
+  "/profile",
+  passport.authenticate("jwt", { session: false }),
+  (req, res) => {
+    res.json({ user: req.user });
+  }
 );
 
 router.post(
@@ -27,7 +33,7 @@ router.post(
 );
 
 router.post(
-  "/resetpassword/:token",
+  "/resetpassword/:resettoken",
   validate(resetPasswordSchema),
   authController.resetPassword
 );

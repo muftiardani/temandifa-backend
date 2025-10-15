@@ -1,7 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const { protect } = require("../../../middleware/authMiddleware");
-const upload = require("../../../middleware/upload");
+
+const {
+  imageUpload,
+  audioUpload,
+  handleMulterError,
+} = require("../../../middleware/upload");
 
 const authRoutes = require("./authRoutes");
 const callRoutes = require("./callRoutes");
@@ -15,14 +20,19 @@ const transcribeController = require("../controllers/transcribeController");
 router.post(
   "/detect",
   protect,
-  upload.single("image"),
+  handleMulterError(imageUpload),
   detectController.detectObject
 );
-router.post("/scan", protect, upload.single("image"), scanController.scanImage);
+router.post(
+  "/scan",
+  protect,
+  handleMulterError(imageUpload),
+  scanController.scanImage
+);
 router.post(
   "/transcribe",
   protect,
-  upload.single("audio"),
+  handleMulterError(audioUpload),
   transcribeController.transcribeAudio
 );
 
