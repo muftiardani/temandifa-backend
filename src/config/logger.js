@@ -1,12 +1,33 @@
 const winston = require("winston");
+const { format } = winston;
+const { combine, timestamp, printf, colorize, json } = format;
+
+const devFormat = printf(({ level, message, timestamp, requestId }) => {
+  return `${timestamp} [${requestId || "N/A"}] ${level}: ${message}`;
+});
+
+const prodFormat = combine(
+  timestamp(),
+  winston.format((info) => {
+    const { requestId } = info;
+    if (requestId) {
+      info.requestId = requestId;
+    }
+    return info;
+  })(),
+  json()
+);
 
 const logger = winston.createLogger({
-  level: "info",
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.errors({ stack: true }),
-    winston.format.json()
-  ),
+  level: process.env.NODE_ENV === "production" ? "info" : "debug",
+  format:
+    process.env.NODE_ENV === "production"
+      ? prodFormat
+      : combine(
+          colorize(),
+          timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
+          devFormat
+        ),
   transports: [new winston.transports.Console()],
 });
 

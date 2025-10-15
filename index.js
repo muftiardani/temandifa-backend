@@ -5,21 +5,27 @@ const cors = require("cors");
 const helmet = require("helmet");
 const passport = require("passport");
 const mongoose = require("mongoose");
+const swaggerUi = require("swagger-ui-express");
+const swaggerJsdoc = require("swagger-jsdoc");
 const connectDB = require("./src/config/db");
-const redisClient = require("./src/config/redis");
+const { redisClient, testRedisConnection } = require("./src/config/redis");
 const logger = require("./src/config/logger");
 const apiRoutes = require("./src/api/v1/routes");
-const errorHandler = require("./src/middleware/errorHandler");
-const { setupSocket } = require("./src/socket/socketHandler");
+const { errorHandler } = require("./src/middleware/errorHandler");
+const addRequestId = require('express-request-id')();
+const { initializeSocket } = require("./src/socket/socketHandler");
 const { startMetricsServer } = require("./src/config/metrics");
 
 const app = express();
 const server = http.createServer(app);
+const PORT = process.env.PORT || 3000;
 
-// Hubungkan ke Database
+// Hubungkan ke Database & Redis
 connectDB();
+testRedisConnection();
 
 // Middleware
+app.use(addRequestId);
 app.use(cors());
 app.use(helmet());
 app.use(express.json());
@@ -29,19 +35,45 @@ app.use(express.urlencoded({ extended: false }));
 app.use(passport.initialize());
 require("./src/config/passport")(passport);
 
-// Routes
+// Konfigurasi Swagger
+const swaggerOptions = {
+  swaggerDefinition: {
+    openapi: "3.0.0",
+    info: {
+      title: "TemanDifa API",
+      version: "1.0.0",
+      description: "API Documentation for the TemanDifa application",
+    },
+    servers: [{ url: `http://localhost:${PORT}/api/v1` }],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
+        },
+      },
+    },
+    security: [{ bearerAuth: [] }],
+  },
+  apis: ["./src/api/v1/routes/*.js"],
+};
+const swaggerDocs = swaggerJsdoc(swaggerOptions);
+
+// Rute API
 app.use("/api/v1", apiRoutes);
+
+// Rute Dokumentasi API
+app.use("/api/v1/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 // Error Handler
 app.use(errorHandler);
 
 // Setup Socket.IO
-setupSocket(server);
+initializeSocket(server);
 
 // Start Metrics Server
 startMetricsServer();
-
-const PORT = process.env.PORT || 3000;
 
 const mainServer = server.listen(PORT, () => {
   logger.info(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
@@ -55,16 +87,18 @@ const gracefulShutdown = (signal) => {
     logger.info("HTTP server closed.");
 
     // Tutup koneksi MongoDB
-    mongoose.connection.close(false, () => {
+    mongoose.connection.close(false).then(() => {
       logger.info("MongoDB connection closed.");
 
       // Tutup koneksi Redis
       if (redisClient.isOpen) {
-        redisClient.quit();
-        logger.info("Redis connection closed.");
+        redisClient.quit().then(() => {
+          logger.info("Redis connection closed.");
+          process.exit(0);
+        });
+      } else {
+        process.exit(0);
       }
-
-      process.exit(0);
     });
   });
 };

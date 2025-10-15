@@ -1,16 +1,46 @@
 const express = require("express");
+const { updatePushToken } = require("../controllers/userController");
+const { protect } = require("../../middleware/authMiddleware");
+const { validate } = require("../../middleware/validators");
+const { pushTokenSchema } = require("../../utils/validationSchemas");
+
 const router = express.Router();
-const userController = require("../controllers/userController");
-const { validate, pushTokenSchema } = require("../../../middleware/validators");
-const passport = require("passport");
 
-// Lindungi rute ini dengan otentikasi JWT
-router.use(passport.authenticate("jwt", { session: false }));
+/**
+ * @swagger
+ * tags:
+ * name: User
+ * description: User-related operations
+ */
 
-router.put(
-  "/pushtoken",
-  validate(pushTokenSchema),
-  userController.updatePushToken
-);
+/**
+ * @swagger
+ * /users/pushtoken:
+ * put:
+ * summary: Update the Expo push token for the current user
+ * tags: [User]
+ * security:
+ * - bearerAuth: []
+ * requestBody:
+ * required: true
+ * content:
+ * application/json:
+ * schema:
+ * type: object
+ * required:
+ * - token
+ * properties:
+ * token:
+ * type: string
+ * description: The Expo push token.
+ * responses:
+ * 200:
+ * description: Push token updated successfully.
+ * 400:
+ * description: Bad request (e.g., token is missing).
+ * 401:
+ * description: Unauthorized.
+ */
+router.put("/pushtoken", protect, validate(pushTokenSchema), updatePushToken);
 
 module.exports = router;
