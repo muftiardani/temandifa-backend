@@ -23,12 +23,14 @@ router.post(
   handleMulterError(imageUpload),
   detectController.detectObject
 );
+
 router.post(
   "/scan",
   protect,
   handleMulterError(imageUpload),
   scanController.scanImage
 );
+
 router.post(
   "/transcribe",
   protect,
