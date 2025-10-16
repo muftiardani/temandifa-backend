@@ -14,12 +14,15 @@ const validate = (schema) => (req, res, next) => {
     });
     next();
   } catch (error) {
-    return res.status(400).json({
-      errors: error.errors.map((err) => ({
-        msg: err.message,
-        path: err.path.join("."),
-      })),
-    });
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        errors: error.issues.map((issue) => ({
+          msg: issue.message,
+          path: issue.path.join("."),
+        })),
+      });
+    }
+    next(error);
   }
 };
 

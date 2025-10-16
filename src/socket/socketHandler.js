@@ -1,26 +1,9 @@
 const jwt = require("jsonwebtoken");
 const logger = require("../config/logger");
 
-const User = {
-  users: [],
-  async findOne({ phoneNumber }) {
-    return this.users.find((u) => u.phoneNumber === phoneNumber);
-  },
-  async findOneAndUpdate({ phoneNumber }, data) {
-    const userIndex = this.users.findIndex(
-      (u) => u.phoneNumber === phoneNumber
-    );
-    if (userIndex > -1) {
-      this.users[userIndex] = { ...this.users[userIndex], ...data };
-      return this.users[userIndex];
-    }
-    return null;
-  },
-};
-
 const userSocketMap = new Map();
 
-module.exports = (io) => {
+const initializeSocket = (io) => {
   io.use((socket, next) => {
     const token = socket.handshake.auth.token;
     if (!token) {
@@ -70,4 +53,8 @@ module.exports = (io) => {
       userSocketMap.delete(socket.user.id);
     });
   });
+};
+
+module.exports = {
+  initializeSocket,
 };

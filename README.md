@@ -80,9 +80,9 @@ Backend ini terdiri dari beberapa layanan independen yang bekerja sama untuk men
     | `AGORA_APP_ID` | App ID dari proyek Agora Anda. | `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
     | `AGORA_APP_CERTIFICATE`| App Certificate dari proyek Agora Anda. | `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
     | **URL Microservice** | | |
-    | `YOLO_DETECTOR_URL` | URL internal untuk layanan deteksi objek YOLO. | `http://yolo-detector:5001` |
-    | `VOICE_TRANSCRIBER_URL`| URL internal untuk layanan transkripsi suara. | `http://voice-transcriber:5002` |
-    | `OCR_SERVICE_URL` | URL internal untuk layanan OCR. | `http://ocr-service:5003` |
+    | `YOLO_DETECTOR_URL` | URL internal untuk layanan deteksi objek YOLO. | `http://yolo-detector:5001/detect` |
+    | `VOICE_TRANSCRIBER_URL`| URL internal untuk layanan transkripsi suara. | `http://voice-transcriber:5002/transcribe` |
+    | `OCR_SERVICE_URL` | URL internal untuk layanan OCR. | `http://ocr-service:5003/scan` |
     | **Konfigurasi Frontend** | | |
     | `FRONTEND_URL` | URL dasar aplikasi *frontend* (untuk link reset password). | `http://localhost:8081` |
     | `CORS_ORIGIN` | URL *frontend* yang diizinkan untuk membuat permintaan ke API. | `http://localhost:8081` |

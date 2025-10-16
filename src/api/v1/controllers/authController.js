@@ -1,3 +1,5 @@
+const asyncHandler = require("express-async-handler");
+const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const { OAuth2Client } = require("google-auth-library");
@@ -38,17 +40,28 @@ const verifyToken = (token, secret) => {
  * @route   POST /api/v1/auth/register
  * @access  Public
  */
-exports.register = async (req, res, next) => {
+exports.register = asyncHandler(async (req, res, next) => {
   const { email, password, username } = req.body;
   try {
-    const userExists = await User.findOne({ $or: [{ email }, { username }] });
+    const queryConditions = [{ email }];
+    if (username) {
+      queryConditions.push({ username });
+    }
+    const userExists = await User.findOne({ $or: queryConditions });
+
     if (userExists) {
       return res
         .status(400)
         .json({ message: "Email atau username sudah terdaftar" });
     }
 
-    const user = await User.create({ username, email, password });
+    const finalUsername = username || email.split("@")[0];
+
+    const user = await User.create({
+      username: finalUsername,
+      email,
+      password,
+    });
     const { accessToken, refreshToken, refreshTokenExpires } =
       generateTokens(user);
 
@@ -64,40 +77,43 @@ exports.register = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-};
+});
 
 /**
  * @desc    Auth user & get token
  * @route   POST /api/v1/auth/login
  * @access  Public
  */
-exports.login = async (req, res, next) => {
+exports.login = asyncHandler(async (req, res, next) => {
   const { login, password } = req.body;
-  try {
-    const user = await User.findOne({
-      $or: [{ email: login }, { username: login }],
-    }).select("+password");
 
-    if (!user || !(await user.comparePassword(password))) {
-      return res.status(401).json({ message: "Kredensial tidak valid" });
-    }
+  const user = await User.findOne({
+    $or: [{ email: login }, { username: login }],
+  }).select("+password");
 
-    const { accessToken, refreshToken, refreshTokenExpires } =
-      generateTokens(user);
-
-    await Session.create({
-      user: user._id,
-      refreshToken,
-      userAgent: req.headers["user-agent"] || "Unknown",
-      ip: req.ip,
-      expiresAt: refreshTokenExpires,
-    });
-
-    res.json({ accessToken, refreshToken });
-  } catch (error) {
-    next(error);
+  if (!user || !user.password) {
+    return res.status(401).json({ message: "Kredensial tidak valid" });
   }
-};
+
+  const isMatch = await bcrypt.compare(password, user.password);
+
+  if (!isMatch) {
+    return res.status(401).json({ message: "Kredensial tidak valid" });
+  }
+
+  const { accessToken, refreshToken, refreshTokenExpires } =
+    generateTokens(user);
+
+  await Session.create({
+    user: user._id,
+    refreshToken,
+    userAgent: req.headers["user-agent"] || "Unknown",
+    ip: req.ip,
+    expiresAt: refreshTokenExpires,
+  });
+
+  res.json({ accessToken, refreshToken });
+});
 
 /**
  * @desc    Google OAuth for mobile
@@ -283,12 +299,14 @@ exports.logout = async (req, res, next) => {
  * @route   GET /api/v1/auth/sessions
  * @access  Private
  */
-exports.getSessions = async (req, res, next) => {
+exports.getSessions = asyncHandler(async (req, res, next) => {
   try {
     const sessions = await Session.find({ user: req.user.id }).sort({
       lastActiveAt: -1,
     });
-    const currentToken = req.body.refreshToken;
+
+    const currentToken = req.body?.refreshToken;
+
     const sanitizedSessions = sessions.map((session) => ({
       id: session._id,
       userAgent: session.userAgent,
@@ -301,7 +319,7 @@ exports.getSessions = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-};
+});
 
 /**
  * @desc    Revoke a specific session
