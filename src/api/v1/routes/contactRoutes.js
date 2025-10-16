@@ -30,19 +30,12 @@ router.use(protect);
  * responses:
  * 200:
  * description: A list of contacts.
- * content:
- * application/json:
- * schema:
- * type: array
- * items:
- * type: object
- * properties:
- * _id:
- * type: string
- * name:
- * type: string
- * phoneNumber:
- * type: string
+ */
+router.route("/").get(getContacts);
+
+/**
+ * @swagger
+ * /contacts:
  * post:
  * summary: Create a new emergency contact
  * tags: [Contacts]
@@ -66,7 +59,7 @@ router.use(protect);
  * 201:
  * description: Contact created successfully.
  */
-router.route("/").get(getContacts).post(validate(contactSchema), addContact);
+router.route("/").post(validate(contactSchema), addContact);
 
 /**
  * @swagger
@@ -99,6 +92,12 @@ router.route("/").get(getContacts).post(validate(contactSchema), addContact);
  * description: Contact updated successfully.
  * 404:
  * description: Contact not found.
+ */
+router.route("/:id").put(validate(contactSchema), updateContact);
+
+/**
+ * @swagger
+ * /contacts/{id}:
  * delete:
  * summary: Delete an emergency contact
  * tags: [Contacts]
@@ -117,9 +116,6 @@ router.route("/").get(getContacts).post(validate(contactSchema), addContact);
  * 404:
  * description: Contact not found.
  */
-router
-  .route("/:id")
-  .put(validate(contactSchema), updateContact)
-  .delete(deleteContact);
+router.route("/:id").delete(deleteContact);
 
 module.exports = router;

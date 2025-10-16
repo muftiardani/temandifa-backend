@@ -106,3 +106,5 @@ startServer().catch((err) => {
   logger.error("Failed to start server:", err);
   process.exit(1);
 });
+
+module.exports = { app, server };
