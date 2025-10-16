@@ -5,8 +5,8 @@ const {
   endCall,
   getCallStatus,
 } = require("../controllers/callController");
-const { protect } = require("../../middleware/authMiddleware");
-const { validate } = require("../../middleware/validators");
+const { protect } = require("../../../middleware/authMiddleware");
+const { validate } = require("../../../middleware/validators");
 const {
   initiateCallSchema,
   callIdSchema,

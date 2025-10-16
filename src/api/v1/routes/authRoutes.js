@@ -10,14 +10,14 @@ const {
   getSessions,
   revokeSession,
 } = require("../controllers/authController");
-const { protect } = require("../../middleware/authMiddleware");
-const { validate } = require("../../middleware/validators");
+const { protect } = require("../../../middleware/authMiddleware");
 const {
+  validate,
   registerSchema,
   loginSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
-} = require("../../utils/validationSchemas");
+} = require("../../../middleware/validators");
 
 const router = express.Router();
 
@@ -72,12 +72,12 @@ router.post("/register", validate(registerSchema), register);
  * schema:
  * type: object
  * required:
- * - email
+ * - login
  * - password
  * properties:
- * email:
+ * login:
  * type: string
- * format: email
+ * description: Can be email or username.
  * password:
  * type: string
  * responses:

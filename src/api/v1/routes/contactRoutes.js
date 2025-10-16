@@ -5,8 +5,8 @@ const {
   updateContact,
   deleteContact,
 } = require("../controllers/contactController");
-const { protect } = require("../../middleware/authMiddleware");
-const { validate } = require("../../middleware/validators");
+const { protect } = require("../../../middleware/authMiddleware");
+const { validate } = require("../../../middleware/validators");
 const { contactSchema } = require("../../utils/validationSchemas");
 
 const router = express.Router();

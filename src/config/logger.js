@@ -1,34 +1,36 @@
 const winston = require("winston");
 const { format } = winston;
-const { combine, timestamp, printf, colorize, json } = format;
+const { combine, timestamp, printf, colorize, json, errors } = format;
 
-const devFormat = printf(({ level, message, timestamp, requestId }) => {
-  return `${timestamp} [${requestId || "N/A"}] ${level}: ${message}`;
+const passRequestId = format((info) => {
+  if (info.requestId) {
+    info.requestId = info.requestId;
+  }
+  return info;
 });
+
+const devFormat = combine(
+  colorize(),
+  timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
+  printf(({ level, message, timestamp, requestId, stack }) => {
+    const reqId = requestId ? `[${requestId}] ` : "";
+    const stackTrace = stack ? `\n${stack}` : "";
+    return `${timestamp} ${level}: ${reqId}${message}${stackTrace}`;
+  })
+);
 
 const prodFormat = combine(
   timestamp(),
-  winston.format((info) => {
-    const { requestId } = info;
-    if (requestId) {
-      info.requestId = requestId;
-    }
-    return info;
-  })(),
+  errors({ stack: true }),
+  passRequestId(),
   json()
 );
 
 const logger = winston.createLogger({
   level: process.env.NODE_ENV === "production" ? "info" : "debug",
-  format:
-    process.env.NODE_ENV === "production"
-      ? prodFormat
-      : combine(
-          colorize(),
-          timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
-          devFormat
-        ),
+  format: process.env.NODE_ENV === "production" ? prodFormat : devFormat,
   transports: [new winston.transports.Console()],
+  exitOnError: false,
 });
 
 module.exports = logger;

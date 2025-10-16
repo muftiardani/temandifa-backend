@@ -6,7 +6,7 @@ const userRoutes = require("./userRoutes");
 const detectController = require("../controllers/detectController");
 const scanController = require("../controllers/scanController");
 const transcribeController = require("../controllers/transcribeController");
-const { protect } = require("../../middleware/authMiddleware");
+const { protect } = require("../../../middleware/authMiddleware");
 const {
   imageUpload,
   audioUpload,

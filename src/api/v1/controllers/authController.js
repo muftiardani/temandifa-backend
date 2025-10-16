@@ -1,12 +1,37 @@
 const crypto = require("crypto");
+const jwt = require("jsonwebtoken");
 const { OAuth2Client } = require("google-auth-library");
 const User = require("../models/User");
 const Session = require("../models/Session");
-const { generateTokens, verifyToken } = require("../../utils/jwt");
-const sendEmail = require("../../services/emailService");
+const sendEmail = require("../../../services/emailService");
 const logger = require("../../../config/logger");
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+const generateTokens = (user) => {
+  const accessToken = jwt.sign(
+    { id: user._id, email: user.email },
+    process.env.JWT_SECRET,
+    { expiresIn: "15m" }
+  );
+
+  const refreshTokenExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const refreshToken = jwt.sign(
+    { id: user._id },
+    process.env.JWT_REFRESH_SECRET,
+    { expiresIn: "7d" }
+  );
+
+  return { accessToken, refreshToken, refreshTokenExpires };
+};
+
+const verifyToken = (token, secret) => {
+  try {
+    return jwt.verify(token, secret);
+  } catch (error) {
+    return null;
+  }
+};
 
 /**
  * @desc    Register a new user
@@ -24,7 +49,6 @@ exports.register = async (req, res, next) => {
     }
 
     const user = await User.create({ username, email, password });
-
     const { accessToken, refreshToken, refreshTokenExpires } =
       generateTokens(user);
 
