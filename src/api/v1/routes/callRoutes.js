@@ -6,11 +6,11 @@ const {
   getCallStatus,
 } = require("../controllers/callController");
 const { protect } = require("../../../middleware/authMiddleware");
-const { validate } = require("../../../middleware/validators");
 const {
+  validate,
   initiateCallSchema,
   callIdSchema,
-} = require("../../utils/validationSchemas");
+} = require("../../../middleware/validators");
 
 const router = express.Router();
 

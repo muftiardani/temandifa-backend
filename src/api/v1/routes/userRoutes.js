@@ -1,8 +1,7 @@
 const express = require("express");
 const { updatePushToken } = require("../controllers/userController");
 const { protect } = require("../../../middleware/authMiddleware");
-const { validate } = require("../../../middleware/validators");
-const { pushTokenSchema } = require("../../utils/validationSchemas");
+const { validate, pushTokenSchema } = require("../../../middleware/validators");
 
 const router = express.Router();
 

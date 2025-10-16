@@ -11,7 +11,7 @@ const {
   imageUpload,
   audioUpload,
   handleMulterError,
-} = require("../../middleware/upload");
+} = require("../../../middleware/upload");
 
 const router = express.Router();
 

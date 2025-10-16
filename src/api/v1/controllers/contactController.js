@@ -24,6 +24,26 @@ exports.addContact = asyncHandler(async (req, res) => {
   res.status(201).json(createdContact);
 });
 
+exports.updateContact = asyncHandler(async (req, res) => {
+  const contact = await Contact.findById(req.params.id);
+
+  if (!contact) {
+    res.status(404);
+    throw new Error("Kontak tidak ditemukan.");
+  }
+
+  if (contact.user.toString() !== req.user.id) {
+    res.status(401);
+    throw new Error("Tidak diizinkan.");
+  }
+
+  contact.name = req.body.name || contact.name;
+  contact.phoneNumber = req.body.phoneNumber || contact.phoneNumber;
+
+  const updatedContact = await contact.save();
+  res.status(200).json(updatedContact);
+});
+
 exports.deleteContact = asyncHandler(async (req, res) => {
   const contact = await Contact.findById(req.params.id);
 

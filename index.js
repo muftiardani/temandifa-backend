@@ -3,7 +3,6 @@ const express = require("express");
 const http = require("http");
 const cors = require("cors");
 const helmet = require("helmet");
-const passport = require("passport");
 const mongoose = require("mongoose");
 const swaggerUi = require("swagger-ui-express");
 const swaggerJsdoc = require("swagger-jsdoc");
@@ -30,10 +29,6 @@ app.use(cors());
 app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-
-// Passport Middleware
-app.use(passport.initialize());
-require("./src/config/passport")(passport);
 
 // Konfigurasi Swagger
 const swaggerOptions = {

@@ -6,8 +6,14 @@ const {
   deleteContact,
 } = require("../controllers/contactController");
 const { protect } = require("../../../middleware/authMiddleware");
-const { validate } = require("../../../middleware/validators");
-const { contactSchema } = require("../../utils/validationSchemas");
+const { validate, contactSchema } = require("../../../middleware/validators");
+
+console.log("--- DEBUGGING contactRoutes.js ---");
+console.log("Is updateContact a function?", typeof updateContact === 'function');
+console.log("Is deleteContact a function?", typeof deleteContact === 'function');
+console.log("Is validate a function?", typeof validate === 'function');
+console.log("Is contactSchema an object?", typeof contactSchema === 'object' && contactSchema !== null);
+console.log("---------------------------------");
 
 const router = express.Router();
 
