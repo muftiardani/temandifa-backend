@@ -7,8 +7,11 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+      - "9100:9100"
     env_file:
       - .env
+    environment:
+      - REDIS_HOST=redis
     depends_on:
       - mongo
       - redis

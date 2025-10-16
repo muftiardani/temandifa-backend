@@ -1,27 +1,24 @@
-const redis = require("redis");
+const { createClient } = require("redis");
 const logger = require("./logger");
 
-const redisHost = process.env.REDIS_HOST || "127.0.0.1";
-const redisPort = process.env.REDIS_PORT || 6379;
-
-const redisClient = redis.createClient({
-  url: `redis://${redisHost}:${redisPort}`,
+const redisClient = createClient({
+  url: `redis://${process.env.REDIS_HOST || "localhost"}:${
+    process.env.REDIS_PORT || 6379
+  }`,
 });
 
-redisClient.on("connect", () => {
-  logger.info("Terhubung ke Redis...");
-});
+redisClient.on("error", (err) => logger.error("Koneksi Redis Error:", err));
 
-redisClient.on("error", (err) => {
-  logger.error("Koneksi Redis Error:", err);
-});
-
-(async () => {
+const connectRedis = async () => {
   try {
-    await redisClient.connect();
+    if (!redisClient.isOpen) {
+      await redisClient.connect();
+      logger.info("Terhubung ke Redis");
+    }
   } catch (err) {
-    logger.error("Gagal terhubung ke Redis:", err);
+    logger.error("Gagal terhubung ke Redis saat startup:", err);
+    process.exit(1);
   }
-})();
+};
 
-module.exports = redisClient;
+module.exports = { redisClient, connectRedis };
