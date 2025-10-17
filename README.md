@@ -71,11 +71,12 @@ Backend ini terdiri dari beberapa layanan independen yang bekerja sama untuk men
     | `GOOGLE_CLIENT_ID` | Client ID dari Google Cloud Console untuk otentikasi. | `xxxxxxxx.apps.googleusercontent.com` |
     | `GOOGLE_CLIENT_SECRET`| Client Secret dari Google Cloud Console. | `GOCSPX-xxxxxxxxxxxx` |
     | **Layanan Email** | | |
-    | `EMAIL_FROM` | Alamat email pengirim untuk fitur lupa kata sandi. | `"TemanDifa <no-reply@temandifa.com>"` |
+    | `FROM_NAME` | Nama pengirim untuk fitur lupa kata sandi. | `"TemanDifa Support"` |
+    | `FROM_EMAIL` | Alamat email pengirim untuk fitur lupa kata sandi. | `"no-reply@temandifa.com"` |
     | `EMAIL_HOST` | Host SMTP server (misalnya, `smtp.gmail.com`). | `smtp.gmail.com` |
     | `EMAIL_PORT` | Port SMTP server (misalnya, `465` untuk SSL). | `465` |
-    | `EMAIL_USER` | Nama pengguna untuk otentikasi SMTP. | `your-email@gmail.com` |
-    | `EMAIL_PASS` | Kata sandi aplikasi (jika menggunakan Gmail) untuk SMTP. | `your_app_password` |
+    | `EMAIL_USERNAME` | Nama pengguna untuk otentikasi SMTP. | `your-email@gmail.com` |
+    | `EMAIL_PASSWORD` | Kata sandi aplikasi (jika menggunakan Gmail) untuk SMTP. | `your_app_password` |
     | **Kredensial Agora** | | |
     | `AGORA_APP_ID` | App ID dari proyek Agora Anda. | `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
     | `AGORA_APP_CERTIFICATE`| App Certificate dari proyek Agora Anda. | `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
