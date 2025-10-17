@@ -1,39 +1,11 @@
 const asyncHandler = require("express-async-handler");
-const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
-const { OAuth2Client } = require("google-auth-library");
 const User = require("../models/User");
 const Session = require("../models/Session");
 const sendEmail = require("../../../services/emailService");
 const logger = require("../../../config/logger");
-
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-
-const generateTokens = (user) => {
-  const accessToken = jwt.sign(
-    { id: user._id, email: user.email },
-    process.env.JWT_SECRET,
-    { expiresIn: "15m" }
-  );
-
-  const refreshTokenExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  const refreshToken = jwt.sign(
-    { id: user._id },
-    process.env.JWT_REFRESH_SECRET,
-    { expiresIn: "7d" }
-  );
-
-  return { accessToken, refreshToken, refreshTokenExpires };
-};
-
-const verifyToken = (token, secret) => {
-  try {
-    return jwt.verify(token, secret);
-  } catch (error) {
-    return null;
-  }
-};
+const authService = require("../services/authService");
 
 /**
  * @desc    Register a new user
@@ -42,41 +14,12 @@ const verifyToken = (token, secret) => {
  */
 exports.register = asyncHandler(async (req, res, next) => {
   const { email, password, username } = req.body;
-  try {
-    const queryConditions = [{ email }];
-    if (username) {
-      queryConditions.push({ username });
-    }
-    const userExists = await User.findOne({ $or: queryConditions });
-
-    if (userExists) {
-      return res
-        .status(400)
-        .json({ message: "Email atau username sudah terdaftar" });
-    }
-
-    const finalUsername = username || email.split("@")[0];
-
-    const user = await User.create({
-      username: finalUsername,
-      email,
-      password,
-    });
-    const { accessToken, refreshToken, refreshTokenExpires } =
-      generateTokens(user);
-
-    await Session.create({
-      user: user._id,
-      refreshToken,
-      userAgent: req.headers["user-agent"] || "Unknown",
-      ip: req.ip,
-      expiresAt: refreshTokenExpires,
-    });
-
-    res.status(201).json({ accessToken, refreshToken });
-  } catch (error) {
-    next(error);
-  }
+  const user = await authService.registerUser(email, password, username);
+  const { accessToken, refreshToken } = await authService.createSession(
+    user,
+    req
+  );
+  res.status(201).json({ accessToken, refreshToken });
 });
 
 /**
@@ -86,32 +29,11 @@ exports.register = asyncHandler(async (req, res, next) => {
  */
 exports.login = asyncHandler(async (req, res, next) => {
   const { login, password } = req.body;
-
-  const user = await User.findOne({
-    $or: [{ email: login }, { username: login }],
-  }).select("+password");
-
-  if (!user || !user.password) {
-    return res.status(401).json({ message: "Kredensial tidak valid" });
-  }
-
-  const isMatch = await bcrypt.compare(password, user.password);
-
-  if (!isMatch) {
-    return res.status(401).json({ message: "Kredensial tidak valid" });
-  }
-
-  const { accessToken, refreshToken, refreshTokenExpires } =
-    generateTokens(user);
-
-  await Session.create({
-    user: user._id,
-    refreshToken,
-    userAgent: req.headers["user-agent"] || "Unknown",
-    ip: req.ip,
-    expiresAt: refreshTokenExpires,
-  });
-
+  const user = await authService.loginUser(login, password);
+  const { accessToken, refreshToken } = await authService.createSession(
+    user,
+    req
+  );
   res.json({ accessToken, refreshToken });
 });
 
@@ -120,48 +42,16 @@ exports.login = asyncHandler(async (req, res, next) => {
  * @route   POST /api/v1/auth/google/mobile
  * @access  Public
  */
-exports.loginWithGoogle = async (req, res, next) => {
+exports.loginWithGoogle = asyncHandler(async (req, res, next) => {
   const { accessToken: googleToken } = req.body;
-  try {
-    const ticket = await client.verifyIdToken({
-      idToken: googleToken,
-      audience: [
-        process.env.GOOGLE_ANDROID_CLIENT_ID,
-        process.env.GOOGLE_IOS_CLIENT_ID,
-      ],
-    });
-    const payload = ticket.getPayload();
-
-    if (!payload || !payload.email) {
-      return res.status(400).json({ message: "Token Google tidak valid" });
-    }
-
-    let user = await User.findOne({ email: payload.email });
-
-    if (!user) {
-      user = await User.create({
-        name: payload.name,
-        email: payload.email,
-        isVerified: true,
-      });
-    }
-
-    const { accessToken, refreshToken, refreshTokenExpires } =
-      generateTokens(user);
-
-    await Session.create({
-      user: user._id,
-      refreshToken,
-      userAgent: req.headers["user-agent"] || "Google Auth",
-      ip: req.ip,
-      expiresAt: refreshTokenExpires,
-    });
-
-    res.json({ accessToken, refreshToken });
-  } catch (error) {
-    next(error);
-  }
-};
+  const user = await authService.loginOrRegisterWithGoogle(googleToken);
+  const { accessToken, refreshToken } = await authService.createSession(
+    user,
+    req,
+    "Google Auth"
+  );
+  res.json({ accessToken, refreshToken });
+});
 
 /**
  * @desc    Forgot password
@@ -205,7 +95,7 @@ exports.forgotPassword = asyncHandler(async (req, res, next) => {
       to: user.email,
       subject: "Atur Ulang Kata Sandi Akun TemanDifa Anda",
       html: emailHtml,
-      text: `Untuk mereset kata sandi Anda, silakan kunjungi URL berikut: ${resetUrl}`, // Fallback untuk klien email non-HTML
+      text: `Untuk mereset kata sandi Anda, silakan kunjungi URL berikut: ${resetUrl}`,
     });
 
     res
@@ -227,34 +117,38 @@ exports.forgotPassword = asyncHandler(async (req, res, next) => {
  * @route   POST /api/v1/auth/resetpassword/:token
  * @access  Public
  */
-exports.resetPassword = async (req, res, next) => {
+exports.resetPassword = asyncHandler(async (req, res, next) => {
+  const resetPasswordToken = crypto
+    .createHash("sha256")
+    .update(req.params.token)
+    .digest("hex");
+
+  const user = await User.findOne({
+    resetPasswordToken,
+    resetPasswordExpire: { $gt: Date.now() },
+  });
+
+  if (!user) {
+    return res
+      .status(400)
+      .json({ message: "Token reset tidak valid atau telah kedaluwarsa" });
+  }
+
+  user.password = req.body.password;
+  user.resetPasswordToken = undefined;
+  user.resetPasswordExpire = undefined;
+  await user.save();
+
+  await Session.deleteMany({ user: user._id });
+
+  res.status(200).json({ message: "Password berhasil direset" });
+});
+
+const verifyToken = (token, secret) => {
   try {
-    const resetPasswordToken = crypto
-      .createHash("sha256")
-      .update(req.params.token)
-      .digest("hex");
-
-    const user = await User.findOne({
-      resetPasswordToken,
-      resetPasswordExpire: { $gt: Date.now() },
-    });
-
-    if (!user) {
-      return res
-        .status(400)
-        .json({ message: "Token reset tidak valid atau telah kedaluwarsa" });
-    }
-
-    user.password = req.body.password;
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpire = undefined;
-    await user.save();
-
-    await Session.deleteMany({ user: user._id });
-
-    res.status(200).json({ message: "Password berhasil direset" });
+    return jwt.verify(token, secret);
   } catch (error) {
-    next(error);
+    return null;
   }
 };
 
@@ -263,52 +157,49 @@ exports.resetPassword = async (req, res, next) => {
  * @route   POST /api/v1/auth/refresh-token
  * @access  Public
  */
-exports.refreshTokens = async (req, res, next) => {
+exports.refreshTokens = asyncHandler(async (req, res, next) => {
   const { refreshToken } = req.body;
   if (!refreshToken) {
     return res.status(401).json({ message: "Refresh token diperlukan" });
   }
 
-  try {
-    const session = await Session.findOne({ refreshToken });
-    const decoded = verifyToken(refreshToken, process.env.JWT_REFRESH_SECRET);
+  const session = await Session.findOne({ refreshToken });
+  const decoded = verifyToken(refreshToken, process.env.JWT_REFRESH_SECRET);
 
-    if (!session || !decoded) {
-      await Session.deleteOne({ refreshToken });
-      return res.status(403).json({
-        message: "Refresh token tidak valid atau sesi telah berakhir",
-      });
-    }
-
-    session.lastActiveAt = Date.now();
-    await session.save();
-
-    const user = await User.findById(decoded.id);
-    if (!user) {
-      return res.status(404).json({ message: "Pengguna tidak ditemukan" });
-    }
-
-    const { accessToken } = generateTokens(user);
-    res.json({ accessToken });
-  } catch (error) {
-    next(error);
+  if (!session || !decoded) {
+    await Session.deleteOne({ refreshToken });
+    return res
+      .status(403)
+      .json({ message: "Refresh token tidak valid atau sesi telah berakhir" });
   }
-};
+
+  session.lastActiveAt = Date.now();
+  await session.save();
+
+  const user = await User.findById(decoded.id);
+  if (!user) {
+    return res.status(404).json({ message: "Pengguna tidak ditemukan" });
+  }
+
+  const accessToken = jwt.sign(
+    { id: user._id, email: user.email },
+    process.env.JWT_SECRET,
+    { expiresIn: "15m" }
+  );
+
+  res.json({ accessToken });
+});
 
 /**
  * @desc    Logout user
  * @route   POST /api/v1/auth/logout
  * @access  Public
  */
-exports.logout = async (req, res, next) => {
+exports.logout = asyncHandler(async (req, res, next) => {
   const { refreshToken } = req.body;
-  try {
-    await Session.deleteOne({ refreshToken });
-    res.status(200).json({ message: "Logout berhasil" });
-  } catch (error) {
-    next(error);
-  }
-};
+  await Session.deleteOne({ refreshToken });
+  res.status(200).json({ message: "Logout berhasil" });
+});
 
 /**
  * @desc    Get all active user sessions
@@ -316,25 +207,20 @@ exports.logout = async (req, res, next) => {
  * @access  Private
  */
 exports.getSessions = asyncHandler(async (req, res, next) => {
-  try {
-    const sessions = await Session.find({ user: req.user.id }).sort({
-      lastActiveAt: -1,
-    });
+  const sessions = await Session.find({ user: req.user.id }).sort({
+    lastActiveAt: -1,
+  });
+  const currentToken = req.body?.refreshToken;
 
-    const currentToken = req.body?.refreshToken;
-
-    const sanitizedSessions = sessions.map((session) => ({
-      id: session._id,
-      userAgent: session.userAgent,
-      ip: session.ip,
-      lastActiveAt: session.lastActiveAt,
-      createdAt: session.createdAt,
-      isCurrent: session.refreshToken === currentToken,
-    }));
-    res.json(sanitizedSessions);
-  } catch (error) {
-    next(error);
-  }
+  const sanitizedSessions = sessions.map((session) => ({
+    id: session._id,
+    userAgent: session.userAgent,
+    ip: session.ip,
+    lastActiveAt: session.lastActiveAt,
+    createdAt: session.createdAt,
+    isCurrent: session.refreshToken === currentToken,
+  }));
+  res.json(sanitizedSessions);
 });
 
 /**
@@ -342,24 +228,20 @@ exports.getSessions = asyncHandler(async (req, res, next) => {
  * @route   DELETE /api/v1/auth/sessions/:id
  * @access  Private
  */
-exports.revokeSession = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const session = await Session.findById(id);
+exports.revokeSession = asyncHandler(async (req, res, next) => {
+  const { id } = req.params;
+  const session = await Session.findById(id);
 
-    if (!session) {
-      return res.status(404).json({ message: "Sesi tidak ditemukan" });
-    }
-
-    if (session.user.toString() !== req.user.id) {
-      return res
-        .status(403)
-        .json({ message: "Tidak diizinkan untuk menghapus sesi ini" });
-    }
-
-    await session.deleteOne();
-    res.status(200).json({ message: "Sesi berhasil dihapus" });
-  } catch (error) {
-    next(error);
+  if (!session) {
+    return res.status(404).json({ message: "Sesi tidak ditemukan" });
   }
-};
+
+  if (session.user.toString() !== req.user.id) {
+    return res
+      .status(403)
+      .json({ message: "Tidak diizinkan untuk menghapus sesi ini" });
+  }
+
+  await session.deleteOne();
+  res.status(200).json({ message: "Sesi berhasil dihapus" });
+});
