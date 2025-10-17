@@ -49,7 +49,7 @@ Backend ini terdiri dari beberapa layanan independen yang bekerja sama untuk men
 1.  **Clone repositori ini:**
 
     ```bash
-    git clone https://github.com/muftiardani/temandifa-backend.git
+    git clone https://github.com/TemanDifa/TemanDifa-Backend.git
     cd temandifa-backend
     ```
 
