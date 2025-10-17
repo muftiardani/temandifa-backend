@@ -123,9 +123,9 @@ Semua *endpoint* berada di bawah *prefix* `/api/v1`. Rute yang ditandai dengan �
 | **Pengguna** | | | |
 | `PUT` | `/users/pushtoken` 🔒 | Memperbarui *push notification token* pengguna. | ✅ Selesai |
 | **Fitur AI** | | | |
-| `POST` | `/detect` 🔒 | Mengunggah gambar untuk deteksi objek. | ✅ Selesai |
-| `POST` | `/scan` 🔒 | Mengunggah gambar untuk ekstraksi teks (OCR). | ✅ Selesai |
-| `POST` | `/transcribe` 🔒 | Mengunggah audio untuk transkripsi suara. | ✅ Selesai |
+| `POST` | `/detect` | Mengunggah gambar untuk deteksi objek. | ✅ Selesai |
+| `POST` | `/scan` | Mengunggah gambar untuk ekstraksi teks (OCR). | ✅ Selesai |
+| `POST` | `/transcribe` | Mengunggah audio untuk transkripsi suara. | ✅ Selesai |
 | **Panggilan Video** | | | |
 | `POST` | `/call/initiate` 🔒 | Memulai panggilan video ke pengguna lain. | ✅ Selesai |
 | `POST` | `/call/:callId/answer` 🔒 | Menjawab panggilan yang masuk. | ✅ Selesai |

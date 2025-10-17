@@ -168,7 +168,7 @@ exports.loginWithGoogle = async (req, res, next) => {
  * @route   POST /api/v1/auth/forgotpassword
  * @access  Public
  */
-exports.forgotPassword = async (req, res, next) => {
+exports.forgotPassword = asyncHandler(async (req, res, next) => {
   let user;
   try {
     user = await User.findOne({ email: req.body.email });
@@ -186,10 +186,26 @@ exports.forgotPassword = async (req, res, next) => {
 
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <div style="max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+          <h2 style="color: #3F7EF3;">Permintaan Atur Ulang Kata Sandi</h2>
+          <p>Halo,</p>
+          <p>Kami menerima permintaan untuk mengatur ulang kata sandi akun TemanDifa Anda. Anda dapat membuat kata sandi baru dengan mengklik tombol di bawah ini.</p>
+          <p style="margin: 30px 0; text-align: center;">
+            <a href="${resetUrl}" style="background-color: #3F7EF3; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-size: 16px;">Atur Ulang Kata Sandi</a>
+          </p>
+          <p>Tautan ini akan kedaluwarsa dalam <strong>10 menit</strong>.</p>
+          <p>Jika Anda tidak merasa meminta perubahan ini, Anda bisa mengabaikan email ini dengan aman.</p>
+        </div>
+      </div>
+    `;
+
     await sendEmail({
       to: user.email,
-      subject: "Reset Password TemanDifa",
-      text: `Anda menerima email ini karena Anda (atau orang lain) meminta reset password untuk akun Anda.\n\nKlik link berikut, atau paste ke browser Anda untuk menyelesaikan proses:\n\n${resetUrl}\n\nJika Anda tidak memintanya, abaikan email ini.`,
+      subject: "Atur Ulang Kata Sandi Akun TemanDifa Anda",
+      html: emailHtml,
+      text: `Untuk mereset kata sandi Anda, silakan kunjungi URL berikut: ${resetUrl}`, // Fallback untuk klien email non-HTML
     });
 
     res
@@ -204,7 +220,7 @@ exports.forgotPassword = async (req, res, next) => {
     }
     next(error);
   }
-};
+});
 
 /**
  * @desc    Reset password

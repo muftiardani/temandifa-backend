@@ -6,7 +6,6 @@ const userRoutes = require("./userRoutes");
 const detectController = require("../controllers/detectController");
 const scanController = require("../controllers/scanController");
 const transcribeController = require("../controllers/transcribeController");
-const { protect } = require("../../../middleware/authMiddleware");
 const {
   imageUpload,
   audioUpload,
@@ -54,7 +53,6 @@ router.use("/users", userRoutes);
  */
 router.post(
   "/detect",
-  protect,
   handleMulterError(imageUpload),
   detectController.detectObjects
 );
@@ -85,7 +83,6 @@ router.post(
  */
 router.post(
   "/scan",
-  protect,
   handleMulterError(imageUpload),
   scanController.scanImage
 );
@@ -116,7 +113,6 @@ router.post(
  */
 router.post(
   "/transcribe",
-  protect,
   handleMulterError(audioUpload),
   transcribeController.transcribeAudio
 );
