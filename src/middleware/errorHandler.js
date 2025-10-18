@@ -1,22 +1,38 @@
-const logger = require("../config/logger");
-
 const errorHandler = (err, req, res, next) => {
-  logger.error("Terjadi error:", {
-    message: err.message,
-    stack: err.stack,
-    status: err.status || 500,
-    url: req.originalUrl,
-    method: req.method,
-  });
+  let statusCode = res.statusCode === 200 ? 500 : res.statusCode;
+  let message = err.message;
 
-  const statusCode = err.status || 500;
-  const message = err.message || "Terjadi kesalahan internal pada server";
+  console.error(err);
+
+  if (err.name === "ValidationError") {
+    statusCode = 422;
+    message = "Data yang Anda masukkan tidak valid. Mohon periksa kembali.";
+  }
+
+  if (err.code && err.code === 11000) {
+    statusCode = 409;
+    const field = Object.keys(err.keyValue);
+    message = `Data untuk '${field}' sudah ada. Silakan gunakan data lain.`;
+  }
+
+  if (err.name === "JsonWebTokenError") {
+    statusCode = 401;
+    message = "Token tidak valid. Silakan login kembali.";
+  }
+  if (err.name === "TokenExpiredError") {
+    statusCode = 401;
+    message = "Sesi Anda telah berakhir. Silakan login kembali.";
+  }
+
+  if (statusCode === 500) {
+    message = "Terjadi masalah pada server. Tim kami sedang menanganinya.";
+  }
 
   res.status(statusCode).json({
-    error: message,
+    success: false,
+    message,
+    stack: process.env.NODE_ENV === "production" ? null : err.stack,
   });
 };
 
-module.exports = {
-  errorHandler,
-};
+module.exports = errorHandler;
