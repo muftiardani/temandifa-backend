@@ -5,8 +5,8 @@ const { Server } = require("socket.io");
 const cors = require("cors");
 const helmet = require("helmet");
 const mongoose = require("mongoose");
-const swaggerUi = require("swagger-ui-express");
-const swaggerJsdoc = require("swagger-jsdoc");
+// const swaggerUi = require("swagger-ui-express");
+// const swaggerJsdoc = require("swagger-jsdoc");
 const connectDB = require("./src/config/db");
 const { redisClient, connectRedis } = require("./src/config/redis");
 const logger = require("./src/config/logger");
@@ -41,35 +41,35 @@ const startServer = async () => {
     app.use(express.urlencoded({ extended: false }));
 
     // Konfigurasi Swagger
-    const swaggerOptions = {
-      swaggerDefinition: {
-        openapi: "3.0.0",
-        info: {
-          title: "TemanDifa API",
-          version: "1.0.0",
-          description: "API Documentation for the TemanDifa application",
-        },
-        servers: [{ url: `http://localhost:${PORT}/api/v1` }],
-        components: {
-          securitySchemes: {
-            bearerAuth: {
-              type: "http",
-              scheme: "bearer",
-              bearerFormat: "JWT",
-            },
-          },
-        },
-        security: [{ bearerAuth: [] }],
-      },
-      apis: ["./src/api/v1/routes/*.js"],
-    };
-    const swaggerDocs = swaggerJsdoc(swaggerOptions);
+    // const swaggerOptions = {
+    //   swaggerDefinition: {
+    //     openapi: "3.0.0",
+    //     info: {
+    //       title: "TemanDifa API",
+    //       version: "1.0.0",
+    //       description: "API Documentation for the TemanDifa application",
+    //     },
+    //     servers: [{ url: `http://localhost:${PORT}/api/v1` }],
+    //     components: {
+    //       securitySchemes: {
+    //         bearerAuth: {
+    //           type: "http",
+    //           scheme: "bearer",
+    //           bearerFormat: "JWT",
+    //         },
+    //       },
+    //     },
+    //     security: [{ bearerAuth: [] }],
+    //   },
+    //   apis: ["./src/api/v1/routes/*.js"],
+    // };
+    // const swaggerDocs = swaggerJsdoc(swaggerOptions);
 
     // Rute API
     app.use("/api/v1", apiRoutes);
 
     // Rute Dokumentasi API
-    app.use("/api/v1/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+    // app.use("/api/v1/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
     // Error Handler
     app.use(errorHandler);
