@@ -1,0 +1,27 @@
+openapi: 3.0.0
+info:
+  title: TemanDifa API
+  version: 1.0.0
+  description: API Documentation for the TemanDifa application
+servers:
+  - url: /api/v1
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+    description: Authentication management
+  - name: Call
+    description: Video call management
+  - name: Contacts
+    description: Emergency contact management
+  - name: Users
+    description: User profile and settings management
+  - name: AI Services
+    description: Endpoints for AI-based processing
+paths: {}

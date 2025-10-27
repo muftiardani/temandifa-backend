@@ -1,0 +1,24 @@
+/users/pushtoken:
+  put:
+    summary: Update the user's Expo push token
+    tags: [Users]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [token]
+            properties:
+              token:
+                type: string
+                description: Expo push token
+    responses:
+      "200":
+        description: Push token updated successfully
+      "400":
+        description: Invalid token provided
+      "401":
+        description: Unauthorized

@@ -1,0 +1,202 @@
+/auth/register:
+  post:
+    summary: Register a new user
+    tags: [Auth]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - email
+              - password
+            properties:
+              email:
+                type: string
+                format: email
+              password:
+                type: string
+                format: password
+                minLength: 8
+    responses:
+      "201":
+        description: User registered successfully
+      "400":
+        description: Bad request (e.g., email already exists)
+
+/auth/login:
+  post:
+    summary: Log in a user
+    tags: [Auth]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - login
+              - password
+            properties:
+              login:
+                type: string
+                description: Can be email or username.
+              password:
+                type: string
+    responses:
+      "200":
+        description: Login successful, returns access and refresh tokens
+      "401":
+        description: Invalid credentials
+
+/auth/logout:
+  post:
+    summary: Log out a user
+    tags: [Auth]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - refreshToken
+            properties:
+              refreshToken:
+                type: string
+    responses:
+      "200":
+        description: Logout successful
+
+/auth/refresh-token:
+  post:
+    summary: Refresh an access token
+    tags: [Auth]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - refreshToken
+            properties:
+              refreshToken:
+                type: string
+    responses:
+      "200":
+        description: Returns a new access token
+      "403":
+        description: Invalid refresh token
+
+/auth/google/mobile:
+  post:
+    summary: Authenticate with Google on mobile
+    tags: [Auth]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - accessToken
+            properties:
+              accessToken:
+                type: string
+    responses:
+      "200":
+        description: Google authentication successful
+
+/auth/profile:
+  get:
+    summary: Get current user profile
+    tags: [Auth]
+    security:
+      - bearerAuth: []
+    responses:
+      "200":
+        description: User profile data
+      "401":
+        description: Unauthorized
+
+/auth/forgotpassword:
+  post:
+    summary: Request a password reset
+    tags: [Auth]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - email
+            properties:
+              email:
+                type: string
+                format: email
+    responses:
+      "200":
+        description: Password reset email sent
+
+/auth/resetpassword/{token}:
+  post:
+    summary: Reset password with a token
+    tags: [Auth]
+    parameters:
+      - in: path
+        name: token
+        required: true
+        schema:
+          type: string
+        description: The password reset token
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - password
+            properties:
+              password:
+                type: string
+                format: password
+    responses:
+      "200":
+        description: Password has been reset successfully
+
+/auth/sessions:
+  get:
+    summary: Get all active sessions for the current user
+    tags: [Auth]
+    security:
+      - bearerAuth: []
+    responses:
+      "200":
+        description: A list of active sessions
+      "401":
+        description: Unauthorized
+
+/auth/sessions/{id}:
+  delete:
+    summary: Revoke a specific session
+    tags: [Auth]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        description: The session ID to revoke
+    responses:
+      "200":
+        description: Session revoked successfully
+      "403":
+        description: Forbidden
+      "404":
+        description: Session not found

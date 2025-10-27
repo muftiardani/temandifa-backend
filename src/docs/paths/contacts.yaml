@@ -1,0 +1,89 @@
+/contacts:
+  get:
+    summary: Get all emergency contacts for the user
+    tags: [Contacts]
+    security:
+      - bearerAuth: []
+    responses:
+      "200":
+        description: List of contacts
+      "401":
+        description: Unauthorized
+
+  post:
+    summary: Add a new emergency contact
+    tags: [Contacts]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, phoneNumber]
+            properties:
+              name:
+                type: string
+              phoneNumber:
+                type: string
+    responses:
+      "201":
+        description: Contact created
+      "400":
+        description: Invalid input
+      "401":
+        description: Unauthorized
+
+/contacts/{id}:
+  put:
+    summary: Update an emergency contact
+    tags: [Contacts]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, phoneNumber]
+            properties:
+              name:
+                type: string
+              phoneNumber:
+                type: string
+    responses:
+      "200":
+        description: Contact updated
+      "400":
+        description: Invalid input
+      "401":
+        description: Unauthorized
+      "404":
+        description: Contact not found
+
+  delete:
+    summary: Delete an emergency contact
+    tags: [Contacts]
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+    responses:
+      "200":
+        description: Contact deleted
+      "401":
+        description: Unauthorized
+      "404":
+        description: Contact not found
