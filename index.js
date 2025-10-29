@@ -4,14 +4,22 @@ const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
 const helmet = require("helmet");
-const mongoose = require("mongoose");
+const morgan = require("morgan");
 const swaggerUi = require("swagger-ui-express");
-const swaggerJsdoc = require("swagger-jsdoc");
+const YAML = require("yamljs");
+const mongoose = require("mongoose");
+const rateLimit = require("express-rate-limit");
+const { ipKeyGenerator } = require("express-rate-limit");
+
 const connectDB = require("./src/config/db");
 const { redisClient, connectRedis } = require("./src/config/redis");
-const logger = require("./src/config/logger");
-const apiRoutes = require("./src/api/v1/routes");
+const {
+  logger,
+  addUserToReq,
+  errorWithContext,
+} = require("./src/config/logger");
 const errorHandler = require("./src/middleware/errorHandler");
+const apiV1Routes = require("./src/api/v1/routes");
 const { initializeSocket } = require("./src/socket/socketHandler");
 const { startMetricsServer } = require("./src/config/metrics");
 
@@ -21,7 +29,8 @@ const PORT = process.env.PORT || 3000;
 
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: process.env.CLIENT_URL || "*",
+    methods: ["GET", "POST"],
   },
 });
 
@@ -33,53 +42,103 @@ const startServer = async () => {
     const addRequestIdModule = await import("express-request-id");
     const addRequestId = addRequestIdModule.default();
 
-    // Middleware
+    app.set("trust proxy", "loopback");
     app.use(addRequestId);
     app.use(cors());
     app.use(helmet());
     app.use(express.json());
-    app.use(express.urlencoded({ extended: false }));
+    app.use(express.urlencoded({ extended: true }));
 
-    const swaggerOptions = {
-      definition: {
-        openapi: "3.0.0",
-        info: {
-          title: "TemanDifa API",
-          version: "1.0.0",
-          description: "API Documentation for the TemanDifa application",
-        },
-        servers: [{ url: `/api/v1` }],
-        components: {
-          securitySchemes: {
-            bearerAuth: {
-              type: "http",
-              scheme: "bearer",
-              bearerFormat: "JWT",
-            },
-          },
-        },
-        security: [{ bearerAuth: [] }],
-      },
-      apis: ["./src/docs/openapi.yaml", "./src/docs/paths/**/*.yaml"],
+    app.use(
+      morgan(process.env.NODE_ENV === "production" ? "combined" : "dev", {
+        stream: { write: (message) => logger.info(message.trim()) },
+        skip: (req, res) => req.path === "/metrics" || req.path === "/health",
+      })
+    );
+
+    const customKeyGenerator = (req) => {
+      const ip = ipKeyGenerator(req);
+      return ip;
     };
-    const swaggerDocs = swaggerJsdoc(swaggerOptions);
 
-    // Rute API Utama
-    app.use("/api/v1", apiRoutes);
+    const generalLimiter = rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 100,
+      message: {
+        message:
+          "Terlalu banyak request dari IP ini, silakan coba lagi setelah 15 menit",
+      },
+      standardHeaders: true,
+      legacyHeaders: false,
+      keyGenerator: customKeyGenerator,
+      handler: (req, res, next, options) => {
+        logger.warn(
+          `Rate limit exceeded for IP ${options.keyGenerator(req)} on ${
+            req.method
+          } ${req.originalUrl}`
+        );
+        res.status(options.statusCode).send(options.message);
+      },
+    });
 
-    // Rute Dokumentasi API Swagger
-    app.use("/api/v1/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+    const authLimiter = rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 10,
+      message: {
+        message:
+          "Terlalu banyak percobaan otentikasi dari IP ini, silakan coba lagi setelah 15 menit",
+      },
+      standardHeaders: true,
+      legacyHeaders: false,
+      keyGenerator: customKeyGenerator,
+      handler: (req, res, next, options) => {
+        logger.warn(
+          `Auth rate limit exceeded for IP ${options.keyGenerator(req)} on ${
+            req.method
+          } ${req.originalUrl}`
+        );
+        res.status(options.statusCode).send(options.message);
+      },
+    });
 
-    // Error Handler
+    app.use("/api", generalLimiter);
+
+    app.use("/api/v1/auth/login", authLimiter);
+    app.use("/api/v1/auth/register", authLimiter);
+    app.use("/api/v1/auth/google/mobile", authLimiter);
+    app.use("/api/v1/auth/forgotpassword", authLimiter);
+    app.use("/api/v1/auth/resetpassword/:token", authLimiter);
+    app.use("/api/v1/auth/refresh-token", authLimiter);
+
+    app.use(addUserToReq);
+
+    app.use("/api/v1", apiV1Routes);
+
+    try {
+      const swaggerDocument = YAML.load("./src/docs/openapi.yaml");
+      app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+      logger.info("Swagger docs available at /api-docs");
+    } catch (yamlError) {
+      logger.error(
+        "Failed to load or parse openapi.yaml for Swagger:",
+        yamlError
+      );
+    }
+
+    app.get("/health", (req, res) => res.status(200).send("OK"));
+
     app.use(errorHandler);
 
-    // Setup Socket.IO
+    if (typeof initializeSocket !== "function") {
+      logger.error(
+        "FATAL: initializeSocket is not a function. Check exports in src/socket/socketHandler.js"
+      );
+      process.exit(1);
+    }
     initializeSocket(io);
 
-    // Start Metrics Server
     startMetricsServer();
 
-    // Mulai Server Utama
     const mainServer = server.listen(PORT, () => {
       logger.info(
         `Server running in ${
@@ -88,37 +147,29 @@ const startServer = async () => {
       );
     });
 
-    // Logika Graceful Shutdown
     const gracefulShutdown = (signal) => {
       logger.info(`${signal} received. Shutting down gracefully...`);
-      mainServer.close(() => {
+      mainServer.close(async () => {
         logger.info("HTTP server closed.");
-        mongoose.connection
-          .close(false)
-          .then(() => {
-            logger.info("MongoDB connection closed.");
-            if (redisClient && redisClient.isOpen) {
-              redisClient
-                .quit()
-                .then(() => {
-                  logger.info("Redis connection closed.");
-                  process.exit(0);
-                })
-                .catch((err) => {
-                  logger.error("Error closing Redis connection:", err);
-                  process.exit(1);
-                });
-            } else {
-              logger.info(
-                "Redis connection already closed or not initialized."
-              );
-              process.exit(0);
-            }
-          })
-          .catch((err) => {
-            logger.error("Error closing MongoDB connection:", err);
-            process.exit(1);
-          });
+        try {
+          await mongoose.connection.close(false);
+          logger.info("MongoDB connection closed.");
+          if (redisClient && redisClient.isOpen) {
+            await redisClient.quit();
+            logger.info("Redis connection closed.");
+          } else {
+            logger.info("Redis connection already closed or not initialized.");
+          }
+          logger.info("Graceful shutdown complete.");
+          process.exit(0);
+        } catch (err) {
+          errorWithContext(
+            "Error during graceful shutdown connections close:",
+            err,
+            null
+          );
+          process.exit(1);
+        }
       });
 
       setTimeout(() => {
@@ -131,14 +182,34 @@ const startServer = async () => {
 
     process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
     process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
+    process.on("unhandledRejection", (reason, promise) => {
+      errorWithContext(
+        "Unhandled Rejection at:",
+        reason instanceof Error ? reason : new Error(String(reason)),
+        null,
+        { promise }
+      );
+      gracefulShutdown("unhandledRejection");
+    });
+
+    process.on("uncaughtException", (error) => {
+      errorWithContext("Uncaught Exception thrown:", error, null);
+      gracefulShutdown("uncaughtException");
+      setTimeout(() => process.exit(1), 2000);
+    });
   } catch (err) {
-    logger.error("Failed to start server:", err);
+    console.error("FATAL: Failed to start server:", err);
+    if (logger && typeof logger.error === "function") {
+      logger.error("Failed to start server:", {
+        error: err.message,
+        stack: err.stack,
+      });
+    }
     process.exit(1);
   }
 };
 
-// Panggil fungsi untuk memulai server
 startServer();
 
-// Ekspor app dan server
-module.exports = { app, server };
+module.exports = { app, server, io };

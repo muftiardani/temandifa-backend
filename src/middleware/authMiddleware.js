@@ -1,32 +1,57 @@
 const jwt = require("jsonwebtoken");
-const logger = require("../config/logger");
+const asyncHandler = require("express-async-handler");
+const User = require("../api/v1/models/User");
+const { logWithContext, errorWithContext } = require("../config/logger");
 
-const protect = (req, res, next) => {
+const protect = asyncHandler(async (req, res, next) => {
   let token;
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith("Bearer")
-  ) {
+  const authHeader = req.headers.authorization;
+
+  if (authHeader && authHeader.startsWith("Bearer ")) {
     try {
-      token = req.headers.authorization.split(" ")[1];
+      token = authHeader.split(" ")[1];
+
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      req.user = { id: decoded.id };
+      const user = await User.findById(decoded.id).select("-password").lean();
+
+      if (!user) {
+        logWithContext("warn", "User associated with token not found", req, {
+          userIdFromToken: decoded.id,
+        });
+        res.status(401);
+        throw new Error("Otorisasi gagal, pengguna tidak ditemukan");
+      }
+
+      req.user = user;
+
+      logWithContext("debug", `User authorized successfully via token`, req);
 
       next();
     } catch (error) {
-      logger.error("Token tidak valid");
-      return res
-        .status(401)
-        .json({ message: "Tidak terautentikasi, token gagal." });
+      errorWithContext(
+        "Authorization failed: Token verification error",
+        error,
+        req
+      );
+      res.status(401);
+      if (error.name === "TokenExpiredError") {
+        throw new Error("Otorisasi gagal, token kedaluwarsa");
+      } else {
+        throw new Error("Otorisasi gagal, token tidak valid");
+      }
     }
   }
 
   if (!token) {
-    return res
-      .status(401)
-      .json({ message: "Tidak terautentikasi, tidak ada token." });
+    logWithContext(
+      "warn",
+      "Authorization failed: No token provided or invalid format",
+      req
+    );
+    res.status(401);
+    throw new Error("Otorisasi gagal, tidak ada token.");
   }
-};
+});
 
 module.exports = { protect };

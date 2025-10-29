@@ -1,24 +1,35 @@
 const express = require("express");
-const {
-  initiateCall,
-  answerCall,
-  endCall,
-  getCallStatus,
-} = require("../controllers/callController");
+const callController = require("../controllers/callController");
 const { protect } = require("../../../middleware/authMiddleware");
 const {
   validate,
   initiateCallSchema,
-  callIdSchema,
+  callIdParamSchema,
 } = require("../../../middleware/validators");
 
 const router = express.Router();
 
-router.use(protect);
+router.post(
+  "/initiate",
+  protect,
+  validate(initiateCallSchema),
+  callController.initiateCall
+);
 
-router.post("/initiate", validate(initiateCallSchema), initiateCall);
-router.get("/status", getCallStatus);
-router.post("/:callId/answer", validate(callIdSchema), answerCall);
-router.post("/:callId/end", validate(callIdSchema), endCall);
+router.get("/status", protect, callController.getCallStatus);
+
+router.post(
+  "/:callId/answer",
+  protect,
+  validate(callIdParamSchema),
+  callController.answerCall
+);
+
+router.post(
+  "/:callId/end",
+  protect,
+  validate(callIdParamSchema),
+  callController.endCall
+);
 
 module.exports = router;

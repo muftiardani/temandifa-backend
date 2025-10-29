@@ -2,39 +2,97 @@ name: CI/CD Pipeline for TemanDifa Backend
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ["18.x"] # Sesuaikan versi Node.js
+        python-version: ["3.9"] # Sesuaikan versi Python
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up Node.js
+      - name: Set up Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v3
         with:
-          node-version: "18"
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+          cache-dependency-path: package-lock.json
 
-      - name: Install Node.js dependencies and Run Tests
-        run: |
-          npm install
-          npm test
+      - name: Install Node.js Dependencies
+        run: npm ci
 
-      - name: Set up Python
+      - name: Audit NPM dependencies
+        run: npm audit --audit-level=high
+
+      - name: Run Node.js Tests
+        run: npm test
+
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
-          python-version: "3.9"
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: "**/requirements.txt"
 
-      - name: Install Python dependencies and Run Tests
+      - name: Install Python Base Dependencies & Testing Tools
         run: |
-          pip install -r base/requirements.txt -r yolo_detector/requirements.txt -r voice_transcriber/requirements.txt -r ocr_service/requirements.txt
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          # Install base dan testing tools dulu
+          pip install -r base/requirements.txt
+          pip install pytest pytest-mock flake8
+
+      - name: Install Service Specific Python Dependencies
+        run: |
+          source venv/bin/activate
+          pip install -r yolo_detector/requirements.txt
+          pip install -r voice_transcriber/requirements.txt
+          pip install -r ocr_service/requirements.txt
+
+      - name: Install pip-audit
+        run: |
+          source venv/bin/activate
+          pip install pip-audit
+
+      - name: Audit Python Dependencies - Base
+        run: |
+          source venv/bin/activate
+          pip-audit -r base/requirements.txt
+
+      - name: Audit Python Dependencies - YOLO Detector
+        run: |
+          source venv/bin/activate
+          pip-audit -r yolo_detector/requirements.txt
+
+      - name: Audit Python Dependencies - OCR Service
+        run: |
+          source venv/bin/activate
+          pip-audit -r ocr_service/requirements.txt
+
+      - name: Audit Python Dependencies - Voice Transcriber
+        run: |
+          source venv/bin/activate
+          pip-audit -r voice_transcriber/requirements.txt
+
+      - name: Run Python Linters and Tests
+        run: |
+          source venv/bin/activate
+          # flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           pytest
 
   build-scan-and-push:
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -77,16 +135,19 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-ocr:latest
 
-      - name: Install Trivy and Scan images
-        run: |
-          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
-          sudo apt-get update
-          sudo apt-get install trivy -y
-          trivy image --ignore-unfixed --exit-code 1 --severity HIGH,CRITICAL ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-gateway:latest
-          trivy image --ignore-unfixed --exit-code 1 --severity HIGH,CRITICAL ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-yolo:latest
-          trivy image --ignore-unfixed --exit-code 1 --severity HIGH,CRITICAL ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-transcriber:latest
-          trivy image --ignore-unfixed --exit-code 1 --severity HIGH,CRITICAL ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-ocr:latest
+      - name: Set up Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "image"
+          ignore-unfixed: true
+          format: "table"
+          exit-code: "1"
+          severity: "HIGH,CRITICAL"
+          image-ref: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-gateway:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-yolo:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-transcriber:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-ocr:latest
 
   deploy:
     needs: build-scan-and-push
@@ -101,5 +162,5 @@ jobs:
           script: |
             cd ~/temandifa-backend
             docker-compose pull
-            docker-compose up -d
+            docker-compose up -d --remove-orphans
             echo "Deployment successful!"

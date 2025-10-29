@@ -1,36 +1,62 @@
 const winston = require("winston");
-const { format } = winston;
-const { combine, timestamp, printf, colorize, json, errors } = format;
+const { combine, timestamp, json, printf, errors, label, colorize } =
+  winston.format;
 
-const passRequestId = format((info) => {
-  if (info.requestId) {
-    info.requestId = info.requestId;
+const addUserToReq = (req, res, next) => {
+  if (req.user && req.user.id) {
+    req.userId = req.user.id;
   }
-  return info;
-});
+  next();
+};
 
 const devFormat = combine(
   colorize(),
   timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
-  printf(({ level, message, timestamp, requestId, stack }) => {
-    const reqId = requestId ? `[${requestId}] ` : "";
-    const stackTrace = stack ? `\n${stack}` : "";
-    return `${timestamp} ${level}: ${reqId}${message}${stackTrace}`;
+  errors({ stack: true }),
+  printf(({ level, message, timestamp, stack, requestId, userId, service }) => {
+    let log = `${timestamp} ${level}`;
+    if (service) log += ` [${service}]`;
+    if (requestId) log += ` [req:${requestId}]`;
+    if (userId) log += ` [user:${userId}]`;
+    log += `: ${message}`;
+    if (stack) log += `\n${stack}`;
+    return log;
   })
 );
 
-const prodFormat = combine(
-  timestamp(),
-  errors({ stack: true }),
-  passRequestId(),
-  json()
-);
+const prodFormat = combine(timestamp(), errors({ stack: true }), json());
 
 const logger = winston.createLogger({
   level: process.env.NODE_ENV === "production" ? "info" : "debug",
   format: process.env.NODE_ENV === "production" ? prodFormat : devFormat,
+  defaultMeta: { service: "api-gateway" },
   transports: [new winston.transports.Console()],
-  exitOnError: false,
+  exceptionHandlers: [new winston.transports.Console()],
+  rejectionHandlers: [new winston.transports.Console()],
 });
 
-module.exports = logger;
+const logWithContext = (level, message, req, meta = {}) => {
+  const logMeta = {
+    ...meta,
+    ...(req && req.id && { requestId: req.id }),
+    ...(req && req.userId && { userId: req.userId }),
+  };
+  logger.log(level, message, logMeta);
+};
+
+const errorWithContext = (message, error, req, meta = {}) => {
+  const logMeta = {
+    ...meta,
+    ...(req && req.id && { requestId: req.id }),
+    ...(req && req.userId && { userId: req.userId }),
+    ...(error instanceof Error && {
+      errorMessage: error.message,
+      errorName: error.name,
+      stack: error.stack,
+    }),
+    ...(!(error instanceof Error) && { errorDetails: String(error) }),
+  };
+  logger.error(message, logMeta);
+};
+
+module.exports = { logger, addUserToReq, logWithContext, errorWithContext };

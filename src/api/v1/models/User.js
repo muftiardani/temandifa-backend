@@ -14,10 +14,6 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-/**
- * Middleware Mongoose: Dijalankan sebelum dokumen disimpan.
- * Jika password diubah (atau baru), maka akan di-hash.
- */
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password") || !this.password) {
     return next();
@@ -27,19 +23,10 @@ userSchema.pre("save", async function (next) {
   next();
 });
 
-/**
- * Method untuk membandingkan password yang dimasukkan dengan hash di database.
- * @param {string} enteredPassword Password yang dimasukkan oleh pengguna.
- * @returns {Promise<boolean>}
- */
 userSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-/**
- * Method untuk menghasilkan token reset password.
- * @returns {string} Token reset yang belum di-hash (untuk dikirim via email).
- */
 userSchema.methods.getResetPasswordToken = function () {
   const resetToken = crypto.randomBytes(20).toString("hex");
 

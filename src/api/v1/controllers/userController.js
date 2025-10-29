@@ -1,29 +1,33 @@
+const asyncHandler = require("express-async-handler");
 const User = require("../models/User");
+const { logWithContext, errorWithContext } = require("../../../config/logger");
 
-exports.updatePushToken = async (req, res, next) => {
-  try {
-    const { token } = req.body;
-    if (!token) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Push token tidak boleh kosong" });
-    }
+exports.updatePushToken = asyncHandler(async (req, res, next) => {
+  const userId = req.user.id;
+  const { token: pushToken } = req.body;
 
-    const user = await User.findById(req.user.id);
+  logWithContext("info", "Update push token request received", req);
 
-    if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Pengguna tidak ditemukan" });
-    }
-
-    user.pushToken = token;
-    await user.save();
-
-    res
-      .status(200)
-      .json({ success: true, data: "Push token berhasil diperbarui" });
-  } catch (error) {
-    next(error);
+  if (!pushToken || typeof pushToken !== "string") {
+    res.status(400);
+    throw new Error("Push token (string) tidak boleh kosong");
   }
-};
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    logWithContext("warn", `User not found during push token update`, req);
+    res.status(404);
+    throw new Error("Pengguna tidak ditemukan");
+  }
+
+  user.pushToken = pushToken;
+  await user.save();
+
+  logWithContext("info", `Push token updated successfully for user`, req);
+
+  res.status(200).json({
+    success: true,
+    message: "Push token berhasil diperbarui",
+  });
+});
