@@ -5,22 +5,19 @@ import os
 
 logger = logging.getLogger(__name__)
 
-def load_model(model_path="yolov8n.pt"):
+def load_model(model_name="yolov8n.pt"):
     """
-    Memuat model YOLOv8 dari path yang ditentukan.
+    Memuat model YOLOv8 berdasarkan nama atau path.
+    Library YOLO akan mencoba mengunduh jika nama model diberikan dan belum ada.
     Mengembalikan objek model atau None jika gagal.
     """
     try:
-        if not os.path.exists(model_path):
-            logger.error(f"Model file not found at path: {model_path}")
-            return None
-
-        logger.info(f"Loading YOLO model from: {model_path}")
-        model = YOLO(model_path)
-        logger.info("YOLO model successfully loaded and initialized.")
+        logger.info(f"Loading YOLO model: {model_name}")
+        model = YOLO(model_name)
+        logger.info(f"YOLO model '{model_name}' successfully loaded and initialized.")
         return model
     except Exception as e:
-        logger.error(f"Error loading YOLO model from '{model_path}': {e}", exc_info=True)
+        logger.error(f"Error loading YOLO model '{model_name}': {e}", exc_info=True)
         return None
 
 def detect_objects_from_image(pil_image: Image.Image, model: YOLO):
@@ -33,7 +30,9 @@ def detect_objects_from_image(pil_image: Image.Image, model: YOLO):
         list: Daftar dictionary berisi hasil deteksi (class, confidence, bbox).
               Mengembalikan list kosong jika tidak ada objek terdeteksi.
     Raises:
-        Exception: Jika terjadi error tak terduga selama proses inferensi.
+        TypeError: Jika input pil_image bukan objek PIL Image.
+        ValueError: Jika model tidak valid atau belum dimuat.
+        RuntimeError: Jika terjadi error tak terduga selama proses inferensi.
     """
     if not isinstance(pil_image, Image.Image):
         logger.error("Invalid input: detect_objects_from_image expects a PIL Image object.")
@@ -79,7 +78,6 @@ def detect_objects_from_image(pil_image: Image.Image, model: YOLO):
                     ]
                     normalized_bbox = [max(0.0, min(1.0, val)) for val in normalized_bbox]
 
-
                     detections.append({
                         "class": class_name,
                         "confidence": float(confidence),
@@ -93,6 +91,6 @@ def detect_objects_from_image(pil_image: Image.Image, model: YOLO):
 
     except Exception as e:
         logger.error(f"Error during YOLO model inference: {e}", exc_info=True)
-        raise InternalServerError(f"An error occurred during model prediction: {e}") from e
+        raise RuntimeError(f"An error occurred during model prediction: {e}") from e
 
     return detections

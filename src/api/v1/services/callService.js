@@ -231,7 +231,7 @@ const answerCall = async (callId, userId) => {
       null
     );
     const error = new Error("Panggilan tidak ditemukan atau telah berakhir.");
-    error.statusCode = 404; // Not Found
+    error.statusCode = 404;
     throw error;
   }
 
