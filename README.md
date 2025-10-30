@@ -50,7 +50,7 @@ Backend ini terdiri dari beberapa layanan independen yang bekerja sama untuk men
     ```
 
 2.  **Konfigurasi Variabel Lingkungan:**
-    Buat file `.env` di direktori *root*. Salin konten di bawah ini dan **isi semua nilai** `<...>` dengan kredensial Anda yang sebenarnya. **Pastikan nama variabel sesuai dengan yang ada di sini.**
+    Buat file `.env` di direktori *root*. Salin konten di bawah ini dan **isi semua nilai** `<...>` dengan kredensial yang sebenarnya. **Pastikan nama variabel sesuai dengan yang ada di sini.**
 
     ```env
     # ----------------------------------
@@ -106,7 +106,7 @@ Backend ini terdiri dari beberapa layanan independen yang bekerja sama untuk men
     OCR_SERVICE_URL=http://ocr-service:5003
 
     # ----------------------------------
-    # Frontend URLs (Sesuaikan dengan URL frontend Anda)
+    # Frontend URLs (Sesuaikan dengan URL frontend)
     # ----------------------------------
     FRONTEND_URL=http://localhost:8081 # Untuk link reset password
     CORS_ORIGIN=http://localhost:8081  # Untuk middleware CORS API
@@ -197,7 +197,7 @@ temandifa-backend/
 │   └── socket/           \# Logika WebSocket (Socket.IO)
 ├── voice\_transcriber/   \# Microservice Transkripsi (Python/Flask)
 ├── yolo\_detector/       \# Microservice Deteksi Objek (Python/Flask)
-├── .env                  \# (ANDA BUAT SENDIRI) Variabel lingkungan
+├── .env                  \# (BUAT SENDIRI) Variabel lingkungan
 ├── .dockerignore
 ├── .gitignore
 ├── docker-compose.yml    \# Orkestrasi Docker
