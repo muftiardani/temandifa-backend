@@ -2,44 +2,48 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const { OAuth2Client } = require("google-auth-library");
-const ms = require("ms");
 const User = require("../models/User");
 const Session = require("../models/Session");
 const { logWithContext, errorWithContext } = require("../../../config/logger");
 const sendEmail = require("./emailService");
+const config = require("../../../config/appConfig");
 
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const googleClient = new OAuth2Client(config.google.clientId);
 
+/**
+ * Menghasilkan Access Token dan Refresh Token untuk user.
+ * @param {object} user - Objek user Mongoose (harus memiliki _id dan email).
+ * @returns {{accessToken: string, refreshToken: string}}
+ */
 const generateTokens = (user) => {
   if (!user || !user._id) {
     throw new Error("User object with _id is required to generate tokens.");
   }
+
   const accessToken = jwt.sign(
     { id: user._id, email: user.email },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRE || "15m" }
+    config.jwt.secret,
+    { expiresIn: config.jwt.expiresIn }
   );
 
-  const refreshToken = jwt.sign(
-    { id: user._id },
-    process.env.JWT_REFRESH_SECRET,
-    { expiresIn: process.env.JWT_REFRESH_EXPIRE || "7d" }
-  );
+  const refreshToken = jwt.sign({ id: user._id }, config.jwt.refreshSecret, {
+    expiresIn: config.jwt.refreshExpiresIn,
+  });
 
   return { accessToken, refreshToken };
 };
 
+/**
+ * Membuat dan menyimpan sesi baru di database.
+ * @param {object} user - Objek user Mongoose.
+ * @param {object} req - Objek request Express.
+ * @param {string} [method="Credentials"] - Metode login (untuk logging User-Agent).
+ * @returns {Promise<{accessToken: string, refreshToken: string}>}
+ */
 const createSession = async (user, req, method = "Credentials") => {
   const { accessToken, refreshToken } = generateTokens(user);
 
-  const refreshTokenExpiresInString = process.env.JWT_REFRESH_EXPIRE || "7d";
-  let expiresAt;
-  try {
-    expiresAt = new Date(Date.now() + ms(refreshTokenExpiresInString));
-  } catch (e) {
-    errorWithContext("Invalid JWT_REFRESH_EXPIRE format in .env", e, req);
-    expiresAt = new Date(Date.now() + ms("7d"));
-  }
+  const expiresAt = new Date(Date.now() + config.jwt.refreshExpiresInMs);
 
   const ip = req
     ? req.headers["x-forwarded-for"] || req.ip || req.connection?.remoteAddress
@@ -66,7 +70,15 @@ const createSession = async (user, req, method = "Credentials") => {
   return { accessToken, refreshToken };
 };
 
-exports.registerUser = async ({ email, password, username }) => {
+/**
+ * Mendaftarkan user baru.
+ * @param {object} data - Data registrasi.
+ * @param {string} data.email - Email user.
+ * @param {string} data.password - Password user.
+ * @param {object} req - Objek request Express (untuk logging).
+ * @returns {Promise<{user: object, accessToken: string, refreshToken: string}>}
+ */
+const registerUser = async ({ email, password }, req) => {
   if (!email || !password) {
     const error = new Error("Email dan password wajib diisi");
     error.statusCode = 400;
@@ -93,14 +105,21 @@ exports.registerUser = async ({ email, password, username }) => {
 
   const { accessToken, refreshToken } = await createSession(
     user,
-    null,
+    req,
     "Registration"
   );
 
   return { user, accessToken, refreshToken };
 };
 
-exports.loginUser = async (loginInput, password, req) => {
+/**
+ * Login user dengan email/username dan password.
+ * @param {string} loginInput - Email atau username.
+ * @param {string} password - Password.
+ * @param {object} req - Objek request Express.
+ * @returns {Promise<{user: object, accessToken: string, refreshToken: string}>}
+ */
+const loginUser = async (loginInput, password, req) => {
   if (!loginInput || !password) {
     const error = new Error("Email/username dan password wajib diisi");
     error.statusCode = 400;
@@ -126,18 +145,21 @@ exports.loginUser = async (loginInput, password, req) => {
     "Credentials"
   );
 
+  user.password = undefined;
   return { user, accessToken, refreshToken };
 };
 
-exports.loginOrRegisterWithGoogle = async (googleAccessToken, req) => {
+/**
+ * Login atau registrasi user menggunakan Google Access Token (ID Token).
+ * @param {string} googleAccessToken - Google ID Token.
+ * @param {object} req - Objek request Express.
+ * @returns {Promise<{user: object, accessToken: string, refreshToken: string}>}
+ */
+const loginOrRegisterWithGoogle = async (googleAccessToken, req) => {
   try {
     const ticket = await googleClient.verifyIdToken({
       idToken: googleAccessToken,
-      audience: [
-        process.env.GOOGLE_CLIENT_ID,
-        process.env.GOOGLE_ANDROID_CLIENT_ID,
-        process.env.GOOGLE_IOS_CLIENT_ID,
-      ].filter(Boolean),
+      audience: config.google.validAudiences,
     });
     const payload = ticket.getPayload();
 
@@ -152,7 +174,7 @@ exports.loginOrRegisterWithGoogle = async (googleAccessToken, req) => {
       throw error;
     }
 
-    const { email, sub: googleId, name } = payload;
+    const { email, sub: googleId } = payload;
     logWithContext("debug", "Google ID token verified successfully", req, {
       email,
     });
@@ -205,17 +227,23 @@ exports.loginOrRegisterWithGoogle = async (googleAccessToken, req) => {
   }
 };
 
-exports.refreshAccessToken = async (refreshTokenInput) => {
+/**
+ * Memperbarui Access Token menggunakan Refresh Token.
+ * @param {string} refreshTokenInput - Refresh token.
+ * @param {object} req - Objek request Express (untuk logging).
+ * @returns {Promise<{accessToken: string}>}
+ */
+const refreshAccessToken = async (refreshTokenInput, req) => {
   const session = await Session.findOne({ refreshToken: refreshTokenInput });
 
   let decoded;
   try {
-    decoded = jwt.verify(refreshTokenInput, process.env.JWT_REFRESH_SECRET);
+    decoded = jwt.verify(refreshTokenInput, config.jwt.refreshSecret);
   } catch (err) {
     logWithContext(
       "warn",
       "Invalid refresh token signature or format used",
-      null,
+      req,
       { error: err.message }
     );
     if (session) {
@@ -223,7 +251,7 @@ exports.refreshAccessToken = async (refreshTokenInput) => {
       logWithContext(
         "info",
         `Deleted session due to invalid refresh token signature: ${session._id}`,
-        null
+        req
       );
     }
     const error = new Error("Refresh token tidak valid");
@@ -235,7 +263,7 @@ exports.refreshAccessToken = async (refreshTokenInput) => {
     logWithContext(
       "warn",
       `Refresh token used but session not found for user ${decoded?.id}`,
-      null
+      req
     );
     const error = new Error(
       "Sesi tidak valid atau sudah logout, harap login kembali"
@@ -249,7 +277,7 @@ exports.refreshAccessToken = async (refreshTokenInput) => {
     logWithContext(
       "warn",
       `Expired refresh token used for user ${decoded?.id}. Session deleted: ${session._id}`,
-      null
+      req
     );
     const error = new Error("Sesi telah kedaluwarsa, harap login kembali");
     error.statusCode = 403;
@@ -260,7 +288,7 @@ exports.refreshAccessToken = async (refreshTokenInput) => {
     logWithContext(
       "error",
       `Refresh token user ID mismatch! Token User: ${decoded.id}, Session User: ${session.user}. Session: ${session._id}`,
-      null
+      req
     );
     await session.deleteOne();
     const error = new Error("Refresh token tidak cocok dengan sesi");
@@ -274,7 +302,7 @@ exports.refreshAccessToken = async (refreshTokenInput) => {
   )
     .exec()
     .catch((err) => {
-      errorWithContext("Failed to update session lastActiveAt", err, null, {
+      errorWithContext("Failed to update session lastActiveAt", err, req, {
         sessionId: session._id,
       });
     });
@@ -284,38 +312,51 @@ exports.refreshAccessToken = async (refreshTokenInput) => {
     logWithContext(
       "error",
       `User ${decoded.id} not found during token refresh despite valid token. Deleting session ${session._id}`,
-      null
+      req
     );
     await session.deleteOne();
     const error = new Error("Pengguna terkait token tidak ditemukan.");
     error.statusCode = 404;
     throw error;
   }
+
   const { accessToken } = generateTokens({ _id: user._id, email: user.email });
 
-  logWithContext("info", `Access token refreshed for user ${decoded.id}`, null);
+  logWithContext("info", `Access token refreshed for user ${decoded.id}`, req);
   return { accessToken };
 };
 
-exports.logoutUser = async (refreshTokenInput) => {
+/**
+ * Logout user dengan menghapus sesi terkait refresh token.
+ * @param {string} refreshTokenInput - Refresh token.
+ * @param {object} req - Objek request Express (untuk logging).
+ * @returns {Promise<void>}
+ */
+const logoutUser = async (refreshTokenInput, req) => {
   if (!refreshTokenInput) return;
   try {
     const result = await Session.deleteOne({ refreshToken: refreshTokenInput });
     if (result.deletedCount > 0) {
-      logWithContext("info", "Session deleted successfully on logout", null);
+      logWithContext("info", "Session deleted successfully on logout", req);
     } else {
       logWithContext(
         "warn",
         "Logout attempt with non-existent or already invalidated refresh token",
-        null
+        req
       );
     }
   } catch (error) {
-    errorWithContext("Error during session deletion on logout", error, null);
+    errorWithContext("Error during session deletion on logout", error, req);
   }
 };
 
-exports.forgotPassword = async (email) => {
+/**
+ * Memproses permintaan lupa password dan mengirim email.
+ * @param {string} email - Email user.
+ * @param {object} req - Objek request Express (untuk logging).
+ * @returns {Promise<string>} - Pesan sukses.
+ */
+const forgotPassword = async (email, req) => {
   if (!email) {
     throw new Error("Email is required for forgot password.");
   }
@@ -325,7 +366,7 @@ exports.forgotPassword = async (email) => {
     logWithContext(
       "warn",
       `Forgot password attempt for non-existent email: ${email}`,
-      null
+      req
     );
     return "Jika email terdaftar, instruksi reset password akan dikirim.";
   }
@@ -334,42 +375,28 @@ exports.forgotPassword = async (email) => {
     const resetToken = user.getResetPasswordToken();
     await user.save({ validateBeforeSave: false });
 
-    const resetUrl = `${
-      process.env.FRONTEND_URL || "http://localhost:8081"
-    }/reset-password/${resetToken}`;
+    const resetUrl = `${config.frontendUrl}/reset-password/${resetToken}`;
 
-    const emailHtml = `
-          <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-            <div style="max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
-              <h2 style="color: #3F7EF3;">Permintaan Atur Ulang Kata Sandi</h2>
-              <p>Halo,</p>
-              <p>Kami menerima permintaan untuk mengatur ulang kata sandi akun TemanDifa Anda. Anda dapat membuat kata sandi baru dengan mengklik tombol di bawah ini.</p>
-              <p style="margin: 30px 0; text-align: center;">
-                <a href="${resetUrl}" style="background-color: #3F7EF3; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-size: 16px;">Atur Ulang Kata Sandi</a>
-              </p>
-              <p>Tautan ini akan kedaluwarsa dalam <strong>10 menit</strong>.</p>
-              <p>Jika Anda tidak merasa meminta perubahan ini, Anda bisa mengabaikan email ini dengan aman.</p>
-              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-              <p style="font-size: 0.9em; color: #aaa;">Email ini dikirim secara otomatis, mohon tidak membalas.</p>
-            </div>
-          </div>
-        `;
-
-    await sendEmail({
-      to: user.email,
-      subject: "Atur Ulang Kata Sandi Akun TemanDifa Anda",
-      html: emailHtml,
-      text: `Untuk mereset kata sandi Anda, silakan kunjungi URL berikut (valid 10 menit): ${resetUrl}`,
-    });
+    await sendEmail(
+      {
+        to: user.email,
+        subject: "Atur Ulang Kata Sandi Akun TemanDifa Anda",
+        template: "resetPassword",
+        context: {
+          resetUrl: resetUrl,
+        },
+      },
+      req
+    );
 
     logWithContext(
       "info",
       `Password reset email sent successfully to ${email}`,
-      null
+      req
     );
     return "Email untuk reset kata sandi telah dikirim";
   } catch (error) {
-    errorWithContext("Failed to send password reset email", error, null, {
+    errorWithContext("Failed to send password reset email", error, req, {
       email,
     });
     user.resetPasswordToken = undefined;
@@ -378,7 +405,7 @@ exports.forgotPassword = async (email) => {
       errorWithContext(
         "Failed to clear reset token after email failure",
         saveErr,
-        null,
+        req,
         { userId: user.id }
       );
     });
@@ -388,7 +415,14 @@ exports.forgotPassword = async (email) => {
   }
 };
 
-exports.resetPassword = async (token, password) => {
+/**
+ * Mereset password user menggunakan token.
+ * @param {string} token - Token reset dari URL.
+ * @param {string} password - Password baru.
+ * @param {object} req - Objek request Express (untuk logging).
+ * @returns {Promise<void>}
+ */
+const resetPassword = async (token, password, req) => {
   if (!token || !password) {
     const error = new Error("Token dan password baru wajib diisi.");
     error.statusCode = 400;
@@ -405,11 +439,7 @@ exports.resetPassword = async (token, password) => {
   });
 
   if (!user) {
-    logWithContext(
-      "warn",
-      "Invalid or expired password reset token used",
-      null
-    );
+    logWithContext("warn", "Invalid or expired password reset token used", req);
     const error = new Error("Token reset tidak valid atau telah kedaluwarsa");
     error.statusCode = 400;
     throw error;
@@ -422,7 +452,7 @@ exports.resetPassword = async (token, password) => {
   try {
     await user.save();
   } catch (saveError) {
-    errorWithContext("Failed to save new password", saveError, null, {
+    errorWithContext("Failed to save new password", saveError, req, {
       userId: user.id,
     });
     const validationError = new Error(
@@ -437,21 +467,27 @@ exports.resetPassword = async (token, password) => {
     logWithContext(
       "info",
       `Deleted ${deletedSessions.deletedCount} sessions for user ${user.id} after password reset`,
-      null
+      req
     );
   } catch (sessionError) {
     errorWithContext(
       "Failed to delete sessions after password reset",
       sessionError,
-      null,
+      req,
       { userId: user.id }
     );
   }
 
-  logWithContext("info", `Password reset successful for user ${user.id}`, null);
+  logWithContext("info", `Password reset successful for user ${user.id}`, req);
 };
 
-exports.getUserSessions = async (userId) => {
+/**
+ * Mendapatkan semua sesi aktif untuk user.
+ * @param {string} userId - ID user.
+ * @param {object} req - Objek request Express (untuk logging).
+ * @returns {Promise<Array<object>>} - Daftar sesi.
+ */
+const getUserSessions = async (userId, req) => {
   try {
     const sessions = await Session.find({ user: userId })
       .sort({ lastActiveAt: -1 })
@@ -467,12 +503,19 @@ exports.getUserSessions = async (userId) => {
     }));
     return sanitizedSessions;
   } catch (error) {
-    errorWithContext(`Failed to get sessions for user ${userId}`, error, null);
+    errorWithContext(`Failed to get sessions for user ${userId}`, error, req);
     throw new Error("Gagal mengambil daftar sesi.");
   }
 };
 
-exports.revokeSession = async (sessionId, userId) => {
+/**
+ * Menghapus (revoke) sesi spesifik milik user.
+ * @param {string} sessionId - ID sesi yang akan dihapus.
+ * @param {string} userId - ID user yang meminta (untuk verifikasi kepemilikan).
+ * @param {object} req - Objek request Express (untuk logging).
+ * @returns {Promise<void>}
+ */
+const revokeSession = async (sessionId, userId, req) => {
   const session = await Session.findById(sessionId);
 
   if (!session) {
@@ -485,7 +528,7 @@ exports.revokeSession = async (sessionId, userId) => {
     logWithContext(
       "warn",
       `User ${userId} attempted to revoke session ${sessionId} owned by ${session.user}`,
-      null
+      req
     );
     const error = new Error("Tidak diizinkan untuk menghapus sesi ini");
     error.statusCode = 403;
@@ -497,13 +540,13 @@ exports.revokeSession = async (sessionId, userId) => {
     logWithContext(
       "info",
       `Session ${sessionId} revoked by user ${userId}`,
-      null
+      req
     );
   } catch (deleteError) {
     errorWithContext(
       `Failed to delete session ${sessionId}`,
       deleteError,
-      null,
+      req,
       { userId }
     );
     throw new Error("Gagal menghapus sesi.");
@@ -511,14 +554,14 @@ exports.revokeSession = async (sessionId, userId) => {
 };
 
 module.exports = {
-  registerUser: exports.registerUser,
-  loginUser: exports.loginUser,
-  loginOrRegisterWithGoogle: exports.loginOrRegisterWithGoogle,
+  registerUser,
+  loginUser,
+  loginOrRegisterWithGoogle,
   createSession,
-  refreshAccessToken: exports.refreshAccessToken,
-  logoutUser: exports.logoutUser,
-  forgotPassword: exports.forgotPassword,
-  resetPassword: exports.resetPassword,
-  getUserSessions: exports.getUserSessions,
-  revokeSession: exports.revokeSession,
+  refreshAccessToken,
+  logoutUser,
+  forgotPassword,
+  resetPassword,
+  getUserSessions,
+  revokeSession,
 };

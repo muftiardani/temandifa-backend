@@ -2,6 +2,7 @@ const jwt = require("jsonwebtoken");
 const asyncHandler = require("express-async-handler");
 const User = require("../api/v1/models/User");
 const { logWithContext, errorWithContext } = require("../config/logger");
+const config = require("../config/appConfig");
 
 const protect = asyncHandler(async (req, res, next) => {
   let token;
@@ -10,7 +11,8 @@ const protect = asyncHandler(async (req, res, next) => {
   if (authHeader && authHeader.startsWith("Bearer ")) {
     try {
       token = authHeader.split(" ")[1];
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+      const decoded = jwt.verify(token, config.jwt.secret);
 
       req.user = await User.findById(decoded.id).select("-password");
 

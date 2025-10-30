@@ -1,45 +1,45 @@
 const multer = require("multer");
 const { logWithContext, errorWithContext } = require("../config/logger");
+const config = require("../config/appConfig");
+
+const ALLOWED_IMAGE_MIMES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/bmp",
+  "image/tiff",
+  "image/jpg",
+];
+
+const ALLOWED_AUDIO_MIMES = [
+  "audio/mpeg",
+  "audio/mp4",
+  "audio/m4a",
+  "audio/wav",
+  "audio/ogg",
+  "audio/webm",
+  "audio/aac",
+  "audio/x-m4a",
+];
 
 const storage = multer.memoryStorage();
 
-const fileFilter = (req, file, cb) => {
+const limits = {
+  fileSize: config.upload.maxFileSizeBytes,
+};
+
+/**
+ * Factory function (Refaktor Tahap 5)
+ * Membuat fungsi fileFilter untuk multer berdasarkan tipe MIME yang diizinkan.
+ *
+ * @param {string[]} allowedMimeTypes - Array berisi tipe MIME yang diizinkan
+ * @returns {function(req, file, cb)} - Fungsi fileFilter untuk multer
+ */
+const createFileFilter = (allowedMimeTypes) => (req, file, cb) => {
   logWithContext("debug", `Filtering uploaded file`, req, {
     filename: file.originalname,
     mimetype: file.mimetype,
   });
-
-  let allowedMimeTypes = [];
-  const url = req.originalUrl.toLowerCase();
-
-  if (url.includes("/detect") || url.includes("/scan")) {
-    allowedMimeTypes = [
-      "image/jpeg",
-      "image/png",
-      "image/webp",
-      "image/bmp",
-      "image/tiff",
-      "image/jpg",
-    ];
-  } else if (url.includes("/transcribe")) {
-    allowedMimeTypes = [
-      "audio/mpeg",
-      "audio/mp4",
-      "audio/m4a",
-      "audio/wav",
-      "audio/ogg",
-      "audio/webm",
-      "audio/aac",
-      "audio/x-m4a",
-    ];
-  } else {
-    logWithContext(
-      "warn",
-      `Upload attempted on unspecified or disallowed route: ${req.originalUrl}`,
-      req
-    );
-    return cb(new Error("Upload file tidak diizinkan untuk rute ini."), false);
-  }
 
   if (allowedMimeTypes.includes(file.mimetype)) {
     cb(null, true);
@@ -59,12 +59,17 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-const limits = {
-  fileSize: 25 * 1024 * 1024,
-};
+const imageUpload = multer({
+  storage,
+  fileFilter: createFileFilter(ALLOWED_IMAGE_MIMES),
+  limits,
+}).single("image");
 
-const imageUpload = multer({ storage, fileFilter, limits }).single("image");
-const audioUpload = multer({ storage, fileFilter, limits }).single("audio");
+const audioUpload = multer({
+  storage,
+  fileFilter: createFileFilter(ALLOWED_AUDIO_MIMES),
+  limits,
+}).single("audio");
 
 const handleMulterError = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
@@ -73,9 +78,7 @@ const handleMulterError = (err, req, res, next) => {
 
     switch (err.code) {
       case "LIMIT_FILE_SIZE":
-        message = `Ukuran file terlalu besar. Maksimum ${
-          limits.fileSize / 1024 / 1024
-        }MB.`;
+        message = `Ukuran file terlalu besar. Maksimum ${config.upload.maxFileSizeMb}MB.`;
         statusCode = 413;
         break;
       case "LIMIT_UNEXPECTED_FILE":
@@ -96,14 +99,6 @@ const handleMulterError = (err, req, res, next) => {
     const fileTypeError = new Error(err.message);
     fileTypeError.statusCode = 415;
     return next(fileTypeError);
-  } else if (
-    err &&
-    err.message === "Upload file tidak diizinkan untuk rute ini."
-  ) {
-    errorWithContext("Disallowed Route Upload Error", err, req);
-    const routeError = new Error(err.message);
-    routeError.statusCode = 403;
-    return next(routeError);
   } else if (err) {
     errorWithContext(
       "Unknown Error during file upload middleware chain",

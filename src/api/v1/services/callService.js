@@ -1,24 +1,21 @@
 const crypto = require("crypto");
 const { RtcTokenBuilder, RtcRole } = require("agora-token");
 const { redisClient } = require("../../../config/redis");
+const config = require("../../../config/appConfig");
 const User = require("../models/User");
 const { logWithContext, errorWithContext } = require("../../../config/logger");
 const notificationService = require("./notificationService");
-const { userSocketMap } = require("../../../socket/socketHandler");
+const appEmitter = require("../../../events/appEmitter");
 
-const AGORA_APP_ID = process.env.AGORA_APP_ID;
-const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE;
-const AGORA_TOKEN_EXPIRATION_TIME_IN_SECONDS = 3600;
-
-const CALL_RINGING_TTL = 60;
-const CALL_ACTIVE_TTL = 3600 * 2;
+const getUserCallKey = (userId) => `user:${userId}:activeCall`;
+const getCallDataKey = (callId) => `call:${callId}`;
 
 const generateAgoraUid = () => {
   return Math.floor(Math.random() * (2 ** 31 - 1)) + 1;
 };
 
 const generateAgoraToken = (channelName, uid, req) => {
-  if (!AGORA_APP_ID || !AGORA_APP_CERTIFICATE) {
+  if (!config.agora.appId || !config.agora.appCertificate) {
     const configError = new Error(
       "Konfigurasi server panggilan tidak lengkap (Agora App ID/Certificate)."
     );
@@ -30,14 +27,14 @@ const generateAgoraToken = (channelName, uid, req) => {
     throw configError;
   }
   const role = RtcRole.PUBLISHER;
-  const expirationTimeInSeconds = AGORA_TOKEN_EXPIRATION_TIME_IN_SECONDS;
+  const expirationTimeInSeconds = config.agora.tokenExpirationSeconds;
   const currentTimestamp = Math.floor(Date.now() / 1000);
   const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
 
   try {
     const token = RtcTokenBuilder.buildTokenWithUid(
-      AGORA_APP_ID,
-      AGORA_APP_CERTIFICATE,
+      config.agora.appId,
+      config.agora.appCertificate,
       channelName,
       uid,
       role,
@@ -79,8 +76,9 @@ const initiateCall = async (callerId, calleePhoneNumber, req) => {
     error.statusCode = 404;
     throw error;
   }
+  const calleeId = callee._id.toString();
 
-  if (callee._id.toString() === callerId) {
+  if (calleeId === callerId) {
     logWithContext("warn", `User ${callerId} tried calling themselves`, req);
     const error = new Error("Anda tidak dapat menelepon diri sendiri.");
     error.statusCode = 400;
@@ -95,22 +93,22 @@ const initiateCall = async (callerId, calleePhoneNumber, req) => {
     throw error;
   }
 
-  const callerExistingCall = await getActiveCall(callerId);
-  if (callerExistingCall) {
+  const callerExistingCallData = await getActiveCall(callerId, req);
+  if (callerExistingCallData) {
     logWithContext(
       "warn",
-      `Caller ${callerId} is already in an active call`,
+      `Caller ${callerId} is already in an active call (${callerExistingCallData.callId})`,
       req
     );
     const error = new Error("Anda sudah berada dalam panggilan lain.");
     error.statusCode = 409;
     throw error;
   }
-  const calleeExistingCall = await getActiveCall(callee._id.toString());
-  if (calleeExistingCall) {
+  const calleeExistingCallData = await getActiveCall(calleeId, req);
+  if (calleeExistingCallData) {
     logWithContext(
       "warn",
-      `Callee ${callee._id} is already in another call`,
+      `Callee ${calleeId} is already in another call (${calleeExistingCallData.callId})`,
       req
     );
     const error = new Error(
@@ -150,7 +148,7 @@ const initiateCall = async (callerId, calleePhoneNumber, req) => {
       token: callerToken,
     },
     callee: {
-      id: callee._id.toString(),
+      id: calleeId,
       name: callee.name || callee.email,
       uid: calleeUid,
       token: calleeToken,
@@ -158,42 +156,72 @@ const initiateCall = async (callerId, calleePhoneNumber, req) => {
     createdAt: new Date().toISOString(),
   };
 
+  const callDataKey = getCallDataKey(callId);
+  const callerCallKey = getUserCallKey(callerId);
+  const calleeCallKey = getUserCallKey(calleeId);
+
   try {
-    await redisClient.set(`call:${callId}`, JSON.stringify(callData), {
-      EX: CALL_RINGING_TTL,
-    });
+    const multi = redisClient.multi();
+    const ringingTtl = config.call.ringingTtlSeconds;
+    multi.set(callDataKey, JSON.stringify(callData), { EX: ringingTtl });
+    multi.set(callerCallKey, callId, { EX: ringingTtl });
+    multi.set(calleeCallKey, callId, { EX: ringingTtl });
+    await multi.exec();
+
     logWithContext(
       "info",
-      `Call state 'ringing' saved to Redis. Call ID: ${callId}`,
+      `Call state 'ringing' and user active call keys saved to Redis. Call ID: ${callId}`,
       req
     );
   } catch (redisError) {
-    errorWithContext("Failed to save call state to Redis", redisError, req);
-    throw new Error("Gagal menyimpan status panggilan.");
+    errorWithContext(
+      "Failed to save initial call state to Redis",
+      redisError,
+      req
+    );
+    await redisClient
+      .del([callDataKey, callerCallKey, calleeCallKey])
+      .catch((e) => {
+        errorWithContext(
+          "Error cleaning up partial Redis state after initiateCall failure",
+          e,
+          req
+        );
+      });
+    throw new Error("Gagal memulai panggilan.");
   }
 
   if (callee.pushToken) {
     logWithContext(
       "info",
-      `Sending push notification to callee ${callee._id}`,
+      `Sending push notification to callee ${calleeId}`,
       req
     );
+    const notificationData = {
+      type: "INCOMING_CALL",
+      callId: callId,
+      channelName: channelName,
+      callerName: callData.caller.name,
+    };
     notificationService
       .sendCallNotification(
         callee.pushToken,
-        caller.name || caller.email || "Seseorang",
-        callId,
-        channelName
+        {
+          title: `Panggilan Masuk`,
+          body: `${callData.caller.name} menelepon Anda`,
+          data: notificationData,
+        },
+        req
       )
       .catch((notifError) => {
         errorWithContext("Failed to send push notification", notifError, req, {
-          calleeId: callee._id,
+          calleeId: calleeId,
         });
       });
   } else {
     logWithContext(
       "warn",
-      `Callee ${callee._id} does not have a push token, skipping notification`,
+      `Callee ${calleeId} does not have a push token, skipping notification`,
       req
     );
   }
@@ -203,22 +231,23 @@ const initiateCall = async (callerId, calleePhoneNumber, req) => {
     channelName: callData.channelName,
     token: callData.caller.token,
     uid: callData.caller.uid,
-    calleeInfo: { name: callData.callee.name },
+    calleeInfo: { name: callData.callee.name, id: callData.callee.id },
   };
 };
 
-const answerCall = async (callId, userId) => {
+const answerCall = async (callId, userId, req) => {
   logWithContext(
     "info",
     `Answering call request for call ID: ${callId} by user ${userId}`,
-    null
+    req
   );
 
+  const callDataKey = getCallDataKey(callId);
   let callDataString;
   try {
-    callDataString = await redisClient.get(`call:${callId}`);
+    callDataString = await redisClient.get(callDataKey);
   } catch (redisError) {
-    errorWithContext("Failed to get call state from Redis", redisError, null, {
+    errorWithContext("Failed to get call state from Redis", redisError, req, {
       callId,
     });
     throw new Error("Gagal mengambil status panggilan.");
@@ -228,7 +257,7 @@ const answerCall = async (callId, userId) => {
     logWithContext(
       "warn",
       `Call ID ${callId} not found or expired when answering`,
-      null
+      req
     );
     const error = new Error("Panggilan tidak ditemukan atau telah berakhir.");
     error.statusCode = 404;
@@ -241,7 +270,7 @@ const answerCall = async (callId, userId) => {
     logWithContext(
       "error",
       `User ${userId} attempted to answer call ${callId} intended for ${callData.callee.id}`,
-      null
+      req
     );
     const error = new Error("Tidak diizinkan untuk menjawab panggilan ini.");
     error.statusCode = 403;
@@ -251,7 +280,7 @@ const answerCall = async (callId, userId) => {
     logWithContext(
       "warn",
       `Attempted to answer call ${callId} which is not 'ringing' (current: ${callData.status})`,
-      null
+      req
     );
     const error = new Error(
       `Tidak dapat menjawab panggilan karena statusnya ${callData.status}.`
@@ -262,88 +291,77 @@ const answerCall = async (callId, userId) => {
 
   callData.status = "active";
   callData.answeredAt = new Date().toISOString();
+  const callerCallKey = getUserCallKey(callData.caller.id);
+  const calleeCallKey = getUserCallKey(callData.callee.id);
 
   try {
-    await redisClient.set(`call:${callId}`, JSON.stringify(callData), {
-      EX: CALL_ACTIVE_TTL,
-    });
+    const multi = redisClient.multi();
+    const activeTtl = config.call.activeTtlSeconds;
+    multi.set(callDataKey, JSON.stringify(callData), { EX: activeTtl });
+    multi.expire(callerCallKey, activeTtl);
+    multi.expire(calleeCallKey, activeTtl);
+    await multi.exec();
+
     logWithContext(
       "info",
-      `Call state updated to 'active' in Redis. Call ID: ${callId}`,
-      null
+      `Call state updated to 'active' and user keys TTL extended in Redis. Call ID: ${callId}`,
+      req
     );
   } catch (redisError) {
     errorWithContext(
       "Failed to update call state to active in Redis",
       redisError,
-      null,
+      req,
       { callId }
     );
+    throw new Error("Gagal memperbarui status panggilan.");
   }
 
-  const callerSocketId = userSocketMap.get(callData.caller.id);
-  if (callerSocketId) {
-    try {
-      const { io } = require("../../index");
-      if (io) {
-        io.to(callerSocketId).emit("call-answered", { callId });
-        logWithContext(
-          "info",
-          `Sent 'call-answered' event to caller ${callData.caller.id}`,
-          null,
-          { callId }
-        );
-      } else {
-        logWithContext(
-          "warn",
-          "Socket.IO instance (io) not found in index.js export",
-          null,
-          { callId }
-        );
-      }
-    } catch (importError) {
-      logWithContext(
-        "error",
-        "Failed to import io from index.js for emitting event",
-        importError,
-        null
-      );
-    }
-  } else {
-    logWithContext(
-      "warn",
-      `Caller socket not found for user ${callData.caller.id}, cannot emit call-answered`,
-      null,
-      { callId }
-    );
-  }
+  logWithContext(
+    "info",
+    `Emitting internal 'call:answered' event for call ${callId}`,
+    req
+  );
+  appEmitter.emit("call:answered", {
+    callId,
+    callerId: callData.caller.id,
+    callee: { id: callData.callee.id, name: callData.callee.name },
+  });
 
   return {
+    callId: callData.callId,
     channelName: callData.channelName,
     token: callData.callee.token,
     uid: callData.callee.uid,
+    callerInfo: { id: callData.caller.id, name: callData.caller.name },
   };
 };
 
-const endCall = async (callId, userId) => {
+const endCall = async (callId, userId, req) => {
   logWithContext(
     "info",
     `Ending/declining/cancelling call request for call ID: ${callId} by user ${userId}`,
-    null
+    req
   );
 
+  const callDataKey = getCallDataKey(callId);
   let callDataString;
   try {
-    callDataString = await redisClient.get(`call:${callId}`);
+    callDataString = await redisClient.get(callDataKey);
   } catch (redisError) {
     errorWithContext(
       "Failed to get call state from Redis during endCall",
       redisError,
-      null,
+      req,
       { callId }
     );
+    logWithContext(
+      "warn",
+      `Could not fetch call data for ${callId} during endCall, assuming already ended`,
+      req
+    );
     return {
-      message: "Gagal mengambil status, panggilan mungkin sudah berakhir.",
+      message: "Panggilan tidak ditemukan atau sudah berakhir.",
     };
   }
 
@@ -351,12 +369,14 @@ const endCall = async (callId, userId) => {
     logWithContext(
       "warn",
       `Call ID ${callId} not found or already ended when attempting to end`,
-      null
+      req
     );
     return { message: "Panggilan tidak ditemukan atau sudah berakhir." };
   }
 
   const callData = JSON.parse(callDataString);
+  const callerCallKey = getUserCallKey(callData.caller.id);
+  const calleeCallKey = getUserCallKey(callData.callee.id);
 
   const isCaller = callData.caller.id === userId;
   const isCallee = callData.callee.id === userId;
@@ -364,11 +384,40 @@ const endCall = async (callId, userId) => {
     logWithContext(
       "error",
       `User ${userId} attempted to end call ${callId} they are not part of`,
-      null
+      req
     );
     const error = new Error("Tidak diizinkan untuk mengakhiri panggilan ini.");
     error.statusCode = 403;
     throw error;
+  }
+
+  try {
+    const deletedCount = await redisClient.del([
+      callDataKey,
+      callerCallKey,
+      calleeCallKey,
+    ]);
+    if (deletedCount > 0) {
+      logWithContext(
+        "info",
+        `Call state and user keys deleted from Redis. Call ID: ${callId}`,
+        req,
+        { deletedCount }
+      );
+    } else {
+      logWithContext(
+        "warn",
+        `Attempted to delete call state/keys from Redis for ${callId}, but key(s) did not exist`,
+        req
+      );
+    }
+  } catch (redisError) {
+    errorWithContext(
+      "Failed to delete call state/keys from Redis",
+      redisError,
+      req,
+      { callId }
+    );
   }
 
   let action = "ended";
@@ -390,155 +439,147 @@ const endCall = async (callId, userId) => {
     peerId = isCaller ? callData.callee.id : callData.caller.id;
     socketEvent = "call-ended";
   } else {
+    action = "already_ended";
+    socketEvent = null;
     logWithContext(
       "info",
-      `Call ${callId} already in state '${callData.status}', no action needed for endCall`,
-      null
-    );
-    return { message: "Panggilan sudah berakhir sebelumnya." };
-  }
-
-  try {
-    const deleted = await redisClient.del(`call:${callId}`);
-    if (deleted > 0) {
-      logWithContext(
-        "info",
-        `Call state deleted from Redis. Call ID: ${callId}`,
-        null
-      );
-    } else {
-      logWithContext(
-        "warn",
-        `Attempted to delete non-existent call state from Redis: ${callId}`,
-        null
-      );
-    }
-  } catch (redisError) {
-    errorWithContext(
-      "Failed to delete call state from Redis",
-      redisError,
-      null,
-      { callId }
+      `Call ${callId} was already in state '${callData.status}' when endCall was processed`,
+      req
     );
   }
 
   if (peerId && socketEvent) {
-    const peerSocketId = userSocketMap.get(peerId);
-    if (peerSocketId) {
-      try {
-        const { io } = require("../../index");
-        if (io) {
-          io.to(peerSocketId).emit(socketEvent, { callId });
-          logWithContext(
-            "info",
-            `Sent '${socketEvent}' event to peer ${peerId}`,
-            null,
-            { callId }
-          );
-        } else {
-          logWithContext(
-            "warn",
-            "Socket.IO instance (io) not found, cannot emit event",
-            null,
-            { callId, peerId, event: socketEvent }
-          );
-        }
-      } catch (importError) {
-        logWithContext(
-          "error",
-          "Failed to import io from index.js for emitting event",
-          importError,
-          null
-        );
-      }
-    } else {
-      logWithContext(
-        "warn",
-        `Peer socket not found for user ${peerId}, cannot emit ${socketEvent}`,
-        null,
-        { callId }
-      );
-    }
+    logWithContext(
+      "info",
+      `Emitting internal 'call:event' (${socketEvent}) for call ${callId} to peer ${peerId}`,
+      req
+    );
+    appEmitter.emit("call:event", {
+      eventName: socketEvent,
+      peerId: peerId,
+      callId: callId,
+      endedBy: userId,
+    });
   }
 
   logWithContext(
     "info",
-    `Call ${callId} successfully ${action} by user ${userId}`,
-    null
+    `Call ${callId} successfully processed for ending (action: ${action}) by user ${userId}`,
+    req
   );
-  const message = `Panggilan berhasil di${
-    action === "cancelled"
-      ? "batalkan"
-      : action === "declined"
-      ? "tolak"
-      : "akhiri"
-  }.`;
+  const message =
+    action === "already_ended"
+      ? "Panggilan sudah berakhir sebelumnya."
+      : `Panggilan berhasil di${
+          action === "cancelled"
+            ? "batalkan"
+            : action === "declined"
+            ? "tolak"
+            : "akhiri"
+        }.`;
   return { message: message };
 };
 
-const getActiveCall = async (userId) => {
+const getActiveCall = async (userId, req) => {
+  const userCallKey = getUserCallKey(userId);
+  let activeCallId = null;
   let activeCallData = null;
-  try {
-    let cursor = 0;
-    do {
-      const reply = await redisClient.scan(cursor, {
-        MATCH: "call:*",
-        COUNT: 100,
-      });
-      cursor = reply.cursor;
-      const keys = reply.keys;
 
+  logWithContext(
+    "debug",
+    `Checking active call for user ${userId} using key ${userCallKey}`,
+    req
+  );
+
+  try {
+    activeCallId = await redisClient.get(userCallKey);
+
+    if (activeCallId) {
       logWithContext(
         "debug",
-        `Scanning Redis keys for active call (cursor: ${cursor}, found ${keys.length} keys)`,
-        null,
-        { userId }
+        `Found potential active call ID ${activeCallId} for user ${userId}`,
+        req
       );
+      const callDataKey = getCallDataKey(activeCallId);
+      const callDataString = await redisClient.get(callDataKey);
 
-      for (const key of keys) {
-        const callDataString = await redisClient.get(key);
-        if (callDataString) {
-          try {
-            const callData = JSON.parse(callDataString);
-            if (
-              (callData.caller.id === userId ||
-                callData.callee.id === userId) &&
-              (callData.status === "ringing" || callData.status === "active")
-            ) {
-              logWithContext(
-                "debug",
-                `Found active/ringing call ${callData.callId} involving user ${userId}`,
-                null
-              );
-              activeCallData = callData;
-              cursor = 0;
-              break;
-            }
-          } catch (parseError) {
-            errorWithContext(
-              `Failed to parse call data from Redis key: ${key}`,
-              parseError,
-              null
+      if (callDataString) {
+        try {
+          const callData = JSON.parse(callDataString);
+          if (
+            (callData.caller.id === userId || callData.callee.id === userId) &&
+            (callData.status === "ringing" || callData.status === "active")
+          ) {
+            activeCallData = callData;
+            logWithContext(
+              "info",
+              `Confirmed active call ${activeCallId} for user ${userId}`,
+              req
             );
+
+            if (activeCallData.caller.id === userId) {
+              if (activeCallData.callee) delete activeCallData.callee.token;
+            } else if (activeCallData.callee.id === userId) {
+              if (activeCallData.caller) delete activeCallData.caller.token;
+            }
+          } else {
+            logWithContext(
+              "warn",
+              `User key ${userCallKey} pointed to call ${activeCallId}, but user ${userId} is not part of it or status is invalid (${callData.status}). Cleaning up user key.`,
+              req
+            );
+            await redisClient
+              .del(userCallKey)
+              .catch((e) =>
+                errorWithContext(
+                  "Failed to cleanup invalid user call key",
+                  e,
+                  req
+                )
+              );
           }
+        } catch (parseError) {
+          errorWithContext(
+            `Failed to parse call data from Redis key: ${callDataKey}`,
+            parseError,
+            req
+          );
+          await redisClient
+            .del(userCallKey)
+            .catch((e) =>
+              errorWithContext(
+                "Failed to cleanup user call key pointing to corrupt data",
+                e,
+                req
+              )
+            );
         }
+      } else {
+        logWithContext(
+          "warn",
+          `User key ${userCallKey} pointed to non-existent call ${activeCallId}. Cleaning up user key.`,
+          req
+        );
+        await redisClient
+          .del(userCallKey)
+          .catch((e) =>
+            errorWithContext("Failed to cleanup stale user call key", e, req)
+          );
       }
-    } while (cursor !== 0);
+    } else {
+      logWithContext(
+        "debug",
+        `No active call key found for user ${userId}`,
+        req
+      );
+    }
   } catch (redisError) {
     errorWithContext(
-      `Error scanning/getting active call for user ${userId} in Redis`,
+      `Error getting active call for user ${userId} from Redis`,
       redisError,
-      null
+      req
     );
     return null;
-  }
-
-  if (activeCallData) {
-    if (activeCallData.caller.id === userId) {
-      if (activeCallData.callee) delete activeCallData.callee.token;
-    } else if (activeCallData.callee.id === userId) {
-      if (activeCallData.caller) delete activeCallData.caller.token;
-    }
   }
 
   return activeCallData;

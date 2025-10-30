@@ -1,9 +1,10 @@
 const express = require("express");
 const promClient = require("prom-client");
 const { logger } = require("./logger");
+const config = require("./appConfig");
 
 const app = express();
-const PORT = process.env.METRICS_PORT || 9100;
+const PORT = config.metricsPort;
 
 promClient.collectDefaultMetrics();
 
@@ -50,4 +51,7 @@ const startMetricsServer = () => {
   });
 };
 
-module.exports = { startMetricsServer, client: promClient };
+module.exports = {
+  startMetricsServer,
+  client: promClient,
+};

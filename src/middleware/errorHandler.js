@@ -1,4 +1,5 @@
 const { errorWithContext } = require("../config/logger");
+const config = require("../config/appConfig");
 
 const errorHandler = (err, req, res, next) => {
   let statusCode =
@@ -42,6 +43,7 @@ const errorHandler = (err, req, res, next) => {
         `Error berkomunikasi dengan layanan internal (${
           err.config?.url || "unknown service"
         }) - Status: ${statusCode}`;
+
       errorWithContext("Error response from internal service", err, req, {
         serviceUrl: err.config?.url,
         serviceStatus: err.response.status,
@@ -72,7 +74,7 @@ const errorHandler = (err, req, res, next) => {
 
   res.status(statusCode).json({
     message: message,
-    stack: process.env.NODE_ENV === "production" ? undefined : err.stack,
+    stack: config.isProduction ? undefined : err.stack,
   });
 };
 

@@ -1,63 +1,26 @@
 const asyncHandler = require("express-async-handler");
-const axios = require("axios");
-const FormData = require("form-data");
-const { yoloDetectorUrl } = require("../../../config/services");
-const { logWithContext, errorWithContext } = require("../../../config/logger");
+const config = require("../../../config/appConfig");
+const { forwardFileToAIService } = require("../services/aiProxyService");
 
+const yoloDetectorUrl = config.serviceUrls.yoloDetector;
+
+const YOLO_TIMEOUT = 30000;
+const YOLO_SERVICE_NAME = "YOLO Detector";
+const FIELD_NAME = "image";
+
+/**
+ * @desc    Mendeteksi objek dalam gambar
+ * @route   POST /api/v1/detect
+ * @access  Protected (via authMiddleware di rute)
+ */
 exports.detectObjects = asyncHandler(async (req, res, next) => {
-  logWithContext("info", "Object detection request received", req);
-
-  if (!req.file) {
-    logWithContext("warn", "No image file uploaded for detection", req);
-    res.status(400);
-    throw new Error("File gambar tidak ditemukan.");
-  }
-
-  logWithContext(
-    "debug",
-    `Processing image for detection: ${req.file.originalname} (${req.file.mimetype}, ${req.file.size} bytes)`,
-    req
+  await forwardFileToAIService(
+    req,
+    res,
+    next,
+    yoloDetectorUrl,
+    FIELD_NAME,
+    YOLO_TIMEOUT,
+    YOLO_SERVICE_NAME
   );
-
-  const formData = new FormData();
-  formData.append("image", req.file.buffer, {
-    filename: req.file.originalname,
-    contentType: req.file.mimetype,
-  });
-
-  try {
-    if (!yoloDetectorUrl) {
-      throw new Error("YOLO Detector service URL is not configured.");
-    }
-
-    logWithContext(
-      "debug",
-      `Forwarding detection request to YOLO service: ${yoloDetectorUrl}`,
-      req
-    );
-
-    const response = await axios.post(yoloDetectorUrl, formData, {
-      headers: {
-        ...formData.getHeaders(),
-        "X-Request-ID": req.id,
-      },
-      timeout: 30000,
-    });
-
-    logWithContext(
-      "info",
-      `Object detection successful from YOLO service`,
-      req
-    );
-
-    res.status(200).json(response.data);
-  } catch (error) {
-    errorWithContext(
-      "Error communicating with YOLO detector service",
-      error,
-      req
-    );
-
-    next(error);
-  }
 });

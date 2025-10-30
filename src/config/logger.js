@@ -1,6 +1,6 @@
 const winston = require("winston");
-const { combine, timestamp, json, printf, errors, label, colorize } =
-  winston.format;
+const config = require("./appConfig");
+const { combine, timestamp, json, printf, errors, colorize } = winston.format;
 
 const addUserToReq = (req, res, next) => {
   if (req.user && req.user.id) {
@@ -27,14 +27,21 @@ const devFormat = combine(
 const prodFormat = combine(timestamp(), errors({ stack: true }), json());
 
 const logger = winston.createLogger({
-  level: process.env.NODE_ENV === "production" ? "info" : "debug",
-  format: process.env.NODE_ENV === "production" ? prodFormat : devFormat,
+  level: config.isProduction ? "info" : "debug",
+  format: config.isProduction ? prodFormat : devFormat,
   defaultMeta: { service: "api-gateway" },
   transports: [new winston.transports.Console()],
   exceptionHandlers: [new winston.transports.Console()],
   rejectionHandlers: [new winston.transports.Console()],
 });
 
+/**
+ * Fungsi helper untuk log standar dengan konteks request.
+ * @param {'info' | 'warn' | 'error' | 'debug'} level - Level log.
+ * @param {string} message - Pesan log.
+ * @param {object} req - Objek request Express (opsional).
+ * @param {object} [meta={}] - Metadata tambahan (opsional).
+ */
 const logWithContext = (level, message, req, meta = {}) => {
   const logMeta = {
     ...meta,
@@ -44,19 +51,36 @@ const logWithContext = (level, message, req, meta = {}) => {
   logger.log(level, message, logMeta);
 };
 
+/**
+ * Fungsi helper untuk log error dengan konteks request dan detail error.
+ * @param {string} message - Pesan log error.
+ * @param {Error | any} error - Objek error.
+ * @param {object} req - Objek request Express (opsional).
+ * @param {object} [meta={}] - Metadata tambahan (opsional).
+ */
 const errorWithContext = (message, error, req, meta = {}) => {
   const logMeta = {
     ...meta,
     ...(req && req.id && { requestId: req.id }),
     ...(req && req.userId && { userId: req.userId }),
-    ...(error instanceof Error && {
-      errorMessage: error.message,
-      errorName: error.name,
-      stack: error.stack,
-    }),
-    ...(!(error instanceof Error) && { errorDetails: String(error) }),
+    ...(error instanceof Error
+      ? {
+          errorMessage: error.message,
+          errorName: error.name,
+          stack: error.stack,
+          ...(error.isAxiosError && {
+            axiosErrorCode: error.code,
+            axiosRequestUrl: error.config?.url,
+          }),
+        }
+      : { errorDetails: String(error) }),
   };
   logger.error(message, logMeta);
 };
 
-module.exports = { logger, addUserToReq, logWithContext, errorWithContext };
+module.exports = {
+  logger,
+  addUserToReq,
+  logWithContext,
+  errorWithContext,
+};

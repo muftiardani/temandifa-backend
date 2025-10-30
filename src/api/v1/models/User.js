@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
+const config = require("../../../config/appConfig");
 
 const userSchema = new mongoose.Schema(
   {
@@ -24,6 +25,7 @@ userSchema.pre("save", async function (next) {
 });
 
 userSchema.methods.matchPassword = async function (enteredPassword) {
+  if (!this.password) return false;
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
@@ -35,7 +37,8 @@ userSchema.methods.getResetPasswordToken = function () {
     .update(resetToken)
     .digest("hex");
 
-  this.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
+  this.resetPasswordExpire =
+    Date.now() + config.email.resetPasswordTokenExpireMinutes * 60 * 1000;
 
   return resetToken;
 };
