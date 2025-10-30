@@ -4,8 +4,6 @@ const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const swaggerUi = require("swagger-ui-express");
-const swaggerJsdoc = require("swagger-jsdoc");
-const YAML = require("yamljs");
 const rateLimit = require("express-rate-limit");
 const { ipKeyGenerator } = require("express-rate-limit");
 
@@ -14,13 +12,20 @@ const { logger, addUserToReq } = require("./logger");
 const errorHandler = require("../middleware/errorHandler");
 const apiV1Routes = require("../api/v1/routes");
 
+const { getOpenApiDocumentation } = require("./swaggerConfig");
+
 const app = express();
 const server = http.createServer(app);
 
 const importDynamicModules = async () => {
-  const addRequestIdModule = await import("express-request-id");
-  const addRequestId = addRequestIdModule.default();
-  app.use(addRequestId);
+  try {
+    const addRequestIdModule = await import("express-request-id");
+    const addRequestId = addRequestIdModule.default();
+    app.use(addRequestId);
+  } catch (err) {
+    logger.error("Gagal mengimpor 'express-request-id'", err);
+    throw err;
+  }
 };
 
 const setupMiddleware = () => {
@@ -96,15 +101,11 @@ const setupRoutesAndErrorHandling = () => {
   app.use("/api/v1", apiV1Routes);
 
   try {
-    const swaggerOptions = {
-      definition: YAML.load("./src/docs/openapi.yaml"),
-      apis: ["./src/docs/paths/**/*.yaml"],
-    };
-    const swaggerDocs = swaggerJsdoc(swaggerOptions);
+    const swaggerDocs = getOpenApiDocumentation();
     app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
-    logger.info("Swagger docs (combined) available at /api-docs");
-  } catch (yamlError) {
-    logger.error("Failed to load or parse OpenAPI/Swagger specs:", yamlError);
+    logger.info("Swagger docs (generated from Zod) available at /api-docs");
+  } catch (error) {
+    logger.error("Failed to generate OpenAPI/Swagger specs from Zod:", error);
   }
 
   app.get("/health", (req, res) => res.status(200).send("OK"));

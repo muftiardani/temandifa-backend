@@ -1,22 +1,18 @@
-from flask import Flask, request, jsonify
+from flask import request, jsonify
 from werkzeug.exceptions import BadRequest, InternalServerError, UnsupportedMediaType
-import io
 import logging
 import os
-import tempfile
 import numpy as np
 import whisper
 import ffmpeg
-from prometheus_flask_exporter import PrometheusMetrics
+
+from common.app_factory import create_app
 
 log_format = '%(asctime)s %(levelname)s [%(name)s] [%(filename)s:%(lineno)d] - %(message)s'
 logging.basicConfig(level=logging.INFO, format=log_format)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
-app.url_map.strict_slashes = False
-metrics = PrometheusMetrics(app, group_by='endpoint')
-logger.info("Flask app (Voice Transcriber) initialized with Prometheus metrics.")
+app, metrics = create_app(__name__)
 
 model = None
 MODEL_TYPE = os.environ.get("WHISPER_MODEL", "base")
@@ -26,6 +22,13 @@ try:
     logger.info(f"Whisper model '{MODEL_TYPE}' loaded successfully.")
 except Exception as e:
     logger.error(f"FATAL: Failed to load Whisper model '{MODEL_TYPE}': {e}", exc_info=True)
+
+try:
+    dummy_audio_segment = np.zeros(16000, dtype=np.float32)
+    logger.info("Dummy audio segment for health check created.")
+except Exception as e:
+    dummy_audio_segment = None
+    logger.error(f"Failed to create dummy audio segment for health check: {e}", exc_info=True)
 
 metrics.info('app_info', 'Voice Transcriber Service Information', version='1.0.0', model_type=MODEL_TYPE)
 
@@ -38,7 +41,7 @@ def convert_audio_to_pcm(input_bytes: bytes) -> np.ndarray:
         logger.debug("Starting audio conversion with FFmpeg...")
         out, err = (
             ffmpeg
-            .input('pipe:0', format='m4a')
+            .input('pipe:0')
             .output('pipe:1', format='s16le', acodec='pcm_s16le', ac=1, ar='16k')
             .run(input=input_bytes, capture_stdout=True, capture_stderr=True, quiet=True)
         )
@@ -61,7 +64,6 @@ def convert_audio_to_pcm(input_bytes: bytes) -> np.ndarray:
     except Exception as e:
         logger.error(f"Error converting audio to PCM: {e}", exc_info=True)
         raise RuntimeError(f"Audio conversion failed: {e}") from e
-
 
 @app.route('/transcribe', methods=['POST'])
 @metrics.counter('transcribe_requests_total', 'Total number of /transcribe requests')
@@ -87,7 +89,7 @@ def transcribe_endpoint():
         logger.warning("Request to /transcribe submitted an empty filename.")
         raise BadRequest("No selected file or empty filename provided.")
 
-    allowed_content_types = {'audio/m4a', 'audio/mp4', 'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm'}
+    allowed_content_types = {'audio/m4a', 'audio/mp4', 'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm', 'audio/aac', 'audio/x-m4a'}
     content_type = file.content_type
     if not content_type or not content_type.lower() in allowed_content_types:
          logger.warning(f"Potentially unsupported content type received: {content_type}")
@@ -130,40 +132,24 @@ def transcribe_endpoint():
 @metrics.do_not_track()
 def health_check():
     """
-    Endpoint health check dasar. Memeriksa apakah model Whisper sudah dimuat.
+    Endpoint health check.
+    Memeriksa model Whisper dimuat DAN dapat melakukan inferensi.
     """
     if model is None:
         logger.error("Health check failed: Whisper model is not loaded.")
         return jsonify({"status": "unhealthy", "reason": "Whisper model not loaded"}), 503
-    logger.debug("Health check successful.")
-    return jsonify({"status": "healthy"}), 200
 
-@app.errorhandler(BadRequest)
-def handle_bad_request(error):
-    logger.warning(f"Bad Request: {error.description} (Path: {request.path})")
-    response = jsonify(message=error.description or "Bad Request")
-    response.status_code = 400
-    return response
+    if dummy_audio_segment is None:
+         logger.error("Health check failed: Dummy audio segment not created.")
+         return jsonify({"status": "unhealthy", "reason": "Health check setup failed"}), 503
 
-@app.errorhandler(UnsupportedMediaType)
-def handle_unsupported_media_type(error):
-    logger.warning(f"Unsupported Media Type: {error.description} (Path: {request.path})")
-    response = jsonify(message=error.description or "Unsupported Media Type")
-    response.status_code = 415
-    return response
-
-@app.errorhandler(InternalServerError)
-@app.errorhandler(Exception)
-def handle_internal_error(error):
-    original_exception = getattr(error, "original_exception", error)
-    error_message = getattr(error, "description", str(original_exception))
-    logger.error(f"Internal Server Error: {error_message} (Path: {request.path})", exc_info=True)
-    response = jsonify(message=error_message or "Internal Server Error")
-    response.status_code = getattr(error, "code", 500)
-    if not (500 <= response.status_code < 600):
-        response.status_code = 500
-        response.set_data(jsonify(message="Internal Server Error").get_data())
-    return response
+    try:
+        _ = model.transcribe(dummy_audio_segment, language="id")
+        logger.debug("Health check Whisper inference successful.")
+        return jsonify({"status": "healthy"}), 200
+    except Exception as e:
+        logger.error(f"Health check failed: Whisper inference error: {e}", exc_info=True)
+        return jsonify({"status": "unhealthy", "reason": f"Whisper inference failed: {e}"}), 503
 
 if __name__ == '__main__':
     host = os.environ.get('HOST', '0.0.0.0')

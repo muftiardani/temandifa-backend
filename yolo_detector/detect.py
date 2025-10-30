@@ -1,7 +1,6 @@
 from ultralytics import YOLO
 from PIL import Image
 import logging
-import os
 
 logger = logging.getLogger(__name__)
 

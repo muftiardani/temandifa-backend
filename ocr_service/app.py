@@ -1,20 +1,25 @@
-from flask import Flask, request, jsonify
+from flask import request, jsonify
 from werkzeug.exceptions import BadRequest, InternalServerError, UnsupportedMediaType
 from PIL import Image
 import io
 import logging
 import os
 import pytesseract
-from prometheus_flask_exporter import PrometheusMetrics
+
+from common.app_factory import create_app
 
 log_format = '%(asctime)s %(levelname)s [%(name)s] [%(filename)s:%(lineno)d] - %(message)s'
 logging.basicConfig(level=logging.INFO, format=log_format)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
-app.url_map.strict_slashes = False
-metrics = PrometheusMetrics(app, group_by='endpoint')
-logger.info("Flask app (OCR Service) initialized with Prometheus metrics.")
+app, metrics = create_app(__name__)
+
+try:
+    dummy_image = Image.new('RGB', (10, 10), color='black')
+    logger.info("Dummy image for health check created.")
+except Exception as e:
+    dummy_image = None
+    logger.error(f"Failed to create dummy image for health check: {e}", exc_info=True)
 
 metrics.info('app_info', 'OCR Service Information', version='1.0.0')
 
@@ -86,38 +91,20 @@ def scan_endpoint():
 @metrics.do_not_track()
 def health_check():
     """
-    Endpoint health check dasar.
-    (Bisa diperluas untuk memeriksa ketersediaan Tesseract jika perlu)
+    Endpoint health check.
+    Memeriksa Tesseract dapat dieksekusi pada gambar dummy.
     """
-    logger.debug("Health check successful.")
-    return jsonify({"status": "healthy"}), 200
-
-@app.errorhandler(BadRequest)
-def handle_bad_request(error):
-    logger.warning(f"Bad Request: {error.description} (Path: {request.path})")
-    response = jsonify(message=error.description or "Bad Request")
-    response.status_code = 400
-    return response
-
-@app.errorhandler(UnsupportedMediaType)
-def handle_unsupported_media_type(error):
-    logger.warning(f"Unsupported Media Type: {error.description} (Path: {request.path})")
-    response = jsonify(message=error.description or "Unsupported Media Type")
-    response.status_code = 415
-    return response
-
-@app.errorhandler(InternalServerError)
-@app.errorhandler(Exception)
-def handle_internal_error(error):
-    original_exception = getattr(error, "original_exception", error)
-    error_message = getattr(error, "description", str(original_exception))
-    logger.error(f"Internal Server Error: {error_message} (Path: {request.path})", exc_info=True)
-    response = jsonify(message=error_message or "Internal Server Error")
-    response.status_code = getattr(error, "code", 500)
-    if not (500 <= response.status_code < 600):
-        response.status_code = 500
-        response.set_data(jsonify(message="Internal Server Error").get_data())
-    return response
+    if dummy_image is None:
+         logger.error("Health check failed: Dummy image not created.")
+         return jsonify({"status": "unhealthy", "reason": "Health check setup failed"}), 503
+    
+    try:
+        _ = pytesseract.image_to_string(dummy_image, lang='ind', timeout=5)
+        logger.debug("Health check Tesseract execution successful.")
+        return jsonify({"status": "healthy"}), 200
+    except Exception as e:
+        logger.error(f"Health check failed: Tesseract execution error: {e}", exc_info=True)
+        return jsonify({"status": "unhealthy", "reason": f"Tesseract execution failed: {e}"}), 503
 
 if __name__ == '__main__':
     host = os.environ.get('HOST', '0.0.0.0')

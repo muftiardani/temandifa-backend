@@ -26,11 +26,13 @@ services:
       context: ./base
       dockerfile: Dockerfile
     image: temandifa-python-base:latest
+    networks:
+      - temandifa-net
 
   yolo-detector:
     build:
-      context: ./yolo_detector
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./yolo_detector/Dockerfile
     container_name: yolo-detector
     restart: unless-stopped
     ports:
@@ -44,8 +46,8 @@ services:
 
   voice-transcriber:
     build:
-      context: ./voice_transcriber
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./voice_transcriber/Dockerfile
     container_name: voice-transcriber
     restart: unless-stopped
     ports:
@@ -59,8 +61,8 @@ services:
 
   ocr-service:
     build:
-      context: ./ocr_service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./ocr_service/Dockerfile
     container_name: ocr-service
     restart: unless-stopped
     ports:
