@@ -6,6 +6,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const swaggerUi = require("swagger-ui-express");
+const swaggerJsdoc = require("swagger-jsdoc");
 const YAML = require("yamljs");
 const mongoose = require("mongoose");
 const rateLimit = require("express-rate-limit");
@@ -18,10 +19,12 @@ const {
   addUserToReq,
   errorWithContext,
 } = require("./src/config/logger");
+const { startMetricsServer } = require("./src/config/metrics");
+
 const errorHandler = require("./src/middleware/errorHandler");
+
 const apiV1Routes = require("./src/api/v1/routes");
 const { initializeSocket } = require("./src/socket/socketHandler");
-const { startMetricsServer } = require("./src/config/metrics");
 
 const app = express();
 const server = http.createServer(app);
@@ -44,7 +47,7 @@ const startServer = async () => {
 
     app.set("trust proxy", "loopback");
     app.use(addRequestId);
-    app.use(cors());
+    app.use(cors({ origin: process.env.CORS_ORIGIN || "*" }));
     app.use(helmet());
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
@@ -102,27 +105,25 @@ const startServer = async () => {
     });
 
     app.use("/api", generalLimiter);
-
     app.use("/api/v1/auth/login", authLimiter);
     app.use("/api/v1/auth/register", authLimiter);
     app.use("/api/v1/auth/google/mobile", authLimiter);
     app.use("/api/v1/auth/forgotpassword", authLimiter);
     app.use("/api/v1/auth/resetpassword/:token", authLimiter);
     app.use("/api/v1/auth/refresh-token", authLimiter);
-
     app.use(addUserToReq);
-
     app.use("/api/v1", apiV1Routes);
 
     try {
-      const swaggerDocument = YAML.load("./src/docs/openapi.yaml");
-      app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-      logger.info("Swagger docs available at /api-docs");
+      const swaggerOptions = {
+        definition: YAML.load("./src/docs/openapi.yaml"),
+        apis: ["./src/docs/paths/**/*.yaml"],
+      };
+      const swaggerDocs = swaggerJsdoc(swaggerOptions);
+      app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+      logger.info("Swagger docs (combined) available at /api-docs");
     } catch (yamlError) {
-      logger.error(
-        "Failed to load or parse openapi.yaml for Swagger:",
-        yamlError
-      );
+      logger.error("Failed to load or parse OpenAPI/Swagger specs:", yamlError);
     }
 
     app.get("/health", (req, res) => res.status(200).send("OK"));
@@ -136,6 +137,7 @@ const startServer = async () => {
       process.exit(1);
     }
     initializeSocket(io);
+    logger.info("Socket.IO initialized.");
 
     startMetricsServer();
 
@@ -182,7 +184,6 @@ const startServer = async () => {
 
     process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
     process.on("SIGINT", () => gracefulShutdown("SIGINT"));
-
     process.on("unhandledRejection", (reason, promise) => {
       errorWithContext(
         "Unhandled Rejection at:",
@@ -192,7 +193,6 @@ const startServer = async () => {
       );
       gracefulShutdown("unhandledRejection");
     });
-
     process.on("uncaughtException", (error) => {
       errorWithContext("Uncaught Exception thrown:", error, null);
       gracefulShutdown("uncaughtException");

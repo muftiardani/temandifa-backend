@@ -10,12 +10,11 @@ const protect = asyncHandler(async (req, res, next) => {
   if (authHeader && authHeader.startsWith("Bearer ")) {
     try {
       token = authHeader.split(" ")[1];
-
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      const user = await User.findById(decoded.id).select("-password").lean();
+      req.user = await User.findById(decoded.id).select("-password");
 
-      if (!user) {
+      if (!req.user) {
         logWithContext("warn", "User associated with token not found", req, {
           userIdFromToken: decoded.id,
         });
@@ -23,10 +22,7 @@ const protect = asyncHandler(async (req, res, next) => {
         throw new Error("Otorisasi gagal, pengguna tidak ditemukan");
       }
 
-      req.user = user;
-
       logWithContext("debug", `User authorized successfully via token`, req);
-
       next();
     } catch (error) {
       errorWithContext(
@@ -50,7 +46,7 @@ const protect = asyncHandler(async (req, res, next) => {
       req
     );
     res.status(401);
-    throw new Error("Otorisasi gagal, tidak ada token.");
+    throw new Error("Otorisasi gagal, tidak ada token");
   }
 });
 

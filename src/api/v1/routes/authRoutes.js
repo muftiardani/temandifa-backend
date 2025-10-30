@@ -16,15 +16,13 @@ const router = express.Router();
 
 router.post("/register", validate(registerSchema), authController.registerUser);
 router.post("/login", validate(loginSchema), authController.loginUser);
-router.post("/logout", validate(logoutSchema), authController.logoutUser);
+router.post("/google/mobile", authController.loginWithGoogleMobile);
 router.post(
   "/refresh-token",
   validate(refreshTokenSchema),
   authController.refreshToken
 );
-
-router.post("/google/mobile", authController.loginWithGoogleMobile);
-
+router.post("/logout", validate(logoutSchema), authController.logoutUser);
 router.post(
   "/forgotpassword",
   validate(forgotPasswordSchema),
@@ -35,7 +33,16 @@ router.post(
   validate(resetPasswordSchema),
   authController.resetPassword
 );
+
+router.get("/profile", protect, (req, res) => {
+  if (req.user) {
+    res.status(200).json(req.user);
+  } else {
+    res.status(404).json({ message: "User tidak ditemukan" });
+  }
+});
 router.get("/sessions", protect, authController.getSessions);
+
 router.delete(
   "/sessions/:sessionId",
   protect,
