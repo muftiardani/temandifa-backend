@@ -19,13 +19,8 @@ const {
   resetPasswordSchema,
   refreshTokenSchema,
   logoutSchema,
+  mongoIdParamSchema,
 } = require("../middleware/validators");
-
-const mongoIdParamSchema = z.object({
-  params: z.object({
-    id: z.string().regex(/^[0-9a-fA-F]{24}$/, "Format ID MongoDB tidak valid"),
-  }),
-});
 
 const registry = new OpenApiRegistry();
 

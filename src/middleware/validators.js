@@ -66,7 +66,7 @@ const registerSchema = z.object({
           "Password harus mengandung setidaknya satu simbol."
         ),
     })
-    .strict(),
+    .strict("Hanya field email dan password yang diizinkan."),
 });
 
 const loginSchema = z.object({
@@ -75,7 +75,7 @@ const loginSchema = z.object({
       login: z.string({ required_error: "Login (email/username) diperlukan." }),
       password: z.string({ required_error: "Password diperlukan." }),
     })
-    .strict(),
+    .strict("Hanya field login dan password yang diizinkan."),
 });
 
 const contactSchema = z.object({
@@ -92,7 +92,7 @@ const contactSchema = z.object({
           "Format nomor telepon tidak valid (minimal 5 digit)."
         ),
     })
-    .strict(),
+    .strict("Hanya field name dan phoneNumber yang diizinkan."),
 });
 
 const pushTokenSchema = z.object({
@@ -105,7 +105,7 @@ const pushTokenSchema = z.object({
           "Format push token Expo tidak valid."
         ),
     })
-    .strict(),
+    .strict("Hanya field token yang diizinkan."),
 });
 
 const initiateCallSchema = z.object({
@@ -118,7 +118,7 @@ const initiateCallSchema = z.object({
           "Format nomor telepon tidak valid (minimal 5 digit)."
         ),
     })
-    .strict(),
+    .strict("Hanya field calleePhoneNumber yang diizinkan."),
 });
 
 const callIdParamSchema = z.object({
@@ -133,7 +133,18 @@ const sessionIdParamSchema = z.object({
   params: z.object({
     sessionId: z
       .string({ required_error: "Session ID wajib ada di parameter URL" })
-      .regex(/^[0-9a-fA-F]{24}$/, "Format Session ID tidak valid"),
+      .regex(
+        /^[0-9a-fA-F]{24}$/,
+        "Format Session ID tidak valid (MongoDB ID)."
+      ),
+  }),
+});
+
+const mongoIdParamSchema = z.object({
+  params: z.object({
+    id: z
+      .string({ required_error: "ID Resource wajib ada di parameter URL" })
+      .regex(/^[0-9a-fA-F]{24}$/, "Format ID tidak valid (MongoDB ID)."),
   }),
 });
 
@@ -144,7 +155,7 @@ const forgotPasswordSchema = z.object({
         .string({ required_error: "Email diperlukan" })
         .email("Format email tidak valid."),
     })
-    .strict(),
+    .strict("Hanya field email yang diizinkan."),
 });
 
 const resetPasswordSchema = z.object({
@@ -165,7 +176,7 @@ const refreshTokenSchema = z.object({
     .object({
       refreshToken: z.string({ required_error: "Refresh token wajib diisi" }),
     })
-    .strict(),
+    .strict("Hanya field refreshToken yang diizinkan."),
 });
 
 const logoutSchema = z.object({
@@ -175,7 +186,7 @@ const logoutSchema = z.object({
         required_error: "Refresh token wajib diisi untuk logout sesi",
       }),
     })
-    .strict(),
+    .strict("Hanya field refreshToken yang diizinkan."),
 });
 
 module.exports = {
@@ -187,6 +198,7 @@ module.exports = {
   initiateCallSchema,
   callIdParamSchema,
   sessionIdParamSchema,
+  mongoIdParamSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
   refreshTokenSchema,
