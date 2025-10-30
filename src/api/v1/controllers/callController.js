@@ -1,6 +1,6 @@
 const asyncHandler = require("express-async-handler");
 const callService = require("../services/callService");
-const { logWithContext, errorWithContext } = require("../../../config/logger");
+const { logWithContext } = require("../../../config/logger");
 
 exports.initiateCall = asyncHandler(async (req, res, next) => {
   const callerId = req.user.id;
@@ -42,7 +42,7 @@ exports.answerCall = asyncHandler(async (req, res, next) => {
     throw new Error("Call ID wajib diisi di parameter URL");
   }
 
-  const callData = await callService.answerCall(callId, userId);
+  const callData = await callService.answerCall(callId, userId, req);
 
   logWithContext("info", `Call answered successfully. Call ID: ${callId}`, req);
   res.status(200).json(callData);
@@ -59,7 +59,7 @@ exports.endCall = asyncHandler(async (req, res, next) => {
     throw new Error("Call ID wajib diisi di parameter URL");
   }
 
-  const result = await callService.endCall(callId, userId);
+  const result = await callService.endCall(callId, userId, req);
 
   logWithContext("info", `Call ended successfully. Call ID: ${callId}`, req);
   res.status(200).json(result);
@@ -70,7 +70,7 @@ exports.getCallStatus = asyncHandler(async (req, res, next) => {
 
   logWithContext("debug", `Fetching call status for user`, req);
 
-  const activeCall = await callService.getActiveCall(userId);
+  const activeCall = await callService.getActiveCall(userId, req);
 
   if (activeCall) {
     logWithContext(

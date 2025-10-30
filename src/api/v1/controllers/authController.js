@@ -1,17 +1,18 @@
 const asyncHandler = require("express-async-handler");
 const authService = require("../services/authService");
-const { logWithContext, errorWithContext } = require("../../../config/logger");
+const { logWithContext } = require("../../../config/logger");
+const config = require("../../../config/appConfig");
 
 exports.registerUser = asyncHandler(async (req, res, next) => {
   const { email, password } = req.body;
   logWithContext("info", "Register user attempt", req, { email });
 
-  const { user, accessToken, refreshToken } = await authService.registerUser({
-    email,
-    password,
-  });
+  const { user, accessToken, refreshToken } = await authService.registerUser(
+    { email, password },
+    req
+  );
 
-  const logLevel = process.env.NODE_ENV === "production" ? "info" : "debug";
+  const logLevel = config.isProduction ? "info" : "debug";
   logWithContext(logLevel, `User registered successfully: ${user.id}`, req);
 
   res.status(201).json({
@@ -32,7 +33,7 @@ exports.loginUser = asyncHandler(async (req, res, next) => {
     req
   );
 
-  const logLevel = process.env.NODE_ENV === "production" ? "info" : "debug";
+  const logLevel = config.isProduction ? "info" : "debug";
   logWithContext(logLevel, `User logged in successfully: ${user.id}`, req);
 
   res.json({
@@ -78,7 +79,10 @@ exports.refreshToken = asyncHandler(async (req, res, next) => {
     throw new Error("Refresh token is required");
   }
 
-  const { accessToken } = await authService.refreshAccessToken(refreshToken);
+  const { accessToken } = await authService.refreshAccessToken(
+    refreshToken,
+    req
+  );
 
   logWithContext("info", "Access token refreshed successfully", req);
   res.json({ accessToken });
@@ -93,7 +97,7 @@ exports.logoutUser = asyncHandler(async (req, res, next) => {
     throw new Error("Refresh token is required for logout");
   }
 
-  await authService.logoutUser(refreshToken);
+  await authService.logoutUser(refreshToken, req);
 
   logWithContext(
     "info",
@@ -107,7 +111,7 @@ exports.forgotPassword = asyncHandler(async (req, res, next) => {
   const { email } = req.body;
   logWithContext("info", "Forgot password request", req, { email });
 
-  const message = await authService.forgotPassword(email);
+  const message = await authService.forgotPassword(email, req);
 
   logWithContext(
     "info",
@@ -126,7 +130,7 @@ exports.resetPassword = asyncHandler(async (req, res, next) => {
   const { password } = req.body;
   logWithContext("info", "Reset password attempt", req);
 
-  await authService.resetPassword(resetToken, password);
+  await authService.resetPassword(resetToken, password, req);
 
   logWithContext("info", "Password reset successfully", req);
   res.status(200).json({ message: "Password reset successful" });
@@ -135,9 +139,9 @@ exports.resetPassword = asyncHandler(async (req, res, next) => {
 exports.getSessions = asyncHandler(async (req, res, next) => {
   logWithContext("info", `Fetching sessions for user`, req);
 
-  const sessions = await authService.getUserSessions(req.user.id);
+  const sessions = await authService.getUserSessions(req.user.id, req);
 
-  const logLevel = process.env.NODE_ENV === "production" ? "info" : "debug";
+  const logLevel = config.isProduction ? "info" : "debug";
   logWithContext(logLevel, `Found ${sessions.length} sessions for user`, req);
   res.status(200).json(sessions);
 });
@@ -147,7 +151,7 @@ exports.revokeSession = asyncHandler(async (req, res, next) => {
   const userId = req.user.id;
   logWithContext("info", `Attempting to revoke session: ${sessionId}`, req);
 
-  await authService.revokeSession(sessionId, userId);
+  await authService.revokeSession(sessionId, userId, req);
 
   logWithContext("info", `Session revoked successfully: ${sessionId}`, req);
   res.status(200).json({ message: "Session revoked successfully" });
