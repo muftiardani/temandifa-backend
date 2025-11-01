@@ -103,7 +103,7 @@ jobs:
           context: ./base
           file: ./base/Dockerfile
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-python-base:latest # Pastikan tag ini
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-python-base:latest
 
       - name: Build and push API Gateway
         uses: docker/build-push-action@v4

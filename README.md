@@ -53,37 +53,27 @@ Backend ini terdiri dari beberapa layanan independen yang bekerja sama untuk men
     Buat file `.env` di direktori *root*. Salin konten di bawah ini dan **isi semua nilai** `<...>` dengan kredensial yang sebenarnya. **Pastikan nama variabel sesuai dengan yang ada di sini.**
 
     ```env
-    # ----------------------------------
     # Konfigurasi Server
-    # ----------------------------------
     PORT=3000
     METRICS_PORT=9100 # Port untuk Prometheus metrics
     NODE_ENV=development # Ganti ke 'production' saat deployment
 
-    # ----------------------------------
     # Database & Cache
-    # ----------------------------------
     MONGO_URI=mongodb://mongo:27017/temandifa_db # Nama service 'mongo' dari docker-compose
     REDIS_URI=redis://redis:6379 # Nama service 'redis' dari docker-compose
 
-    # ----------------------------------
     # JWT Secrets (Ganti dengan kunci rahasia yang SANGAT KUAT)
-    # ----------------------------------
     JWT_SECRET=<YOUR_STRONG_JWT_SECRET>
     JWT_REFRESH_SECRET=<YOUR_DIFFERENT_STRONG_JWT_REFRESH_SECRET>
     JWT_EXPIRE="15m" # Durasi access token
     JWT_REFRESH_EXPIRE="7d" # Durasi refresh token
 
-    # ----------------------------------
     # Google OAuth Credentials (Dari Google Cloud Console)
-    # ----------------------------------
     GOOGLE_CLIENT_ID=<YOUR_GOOGLE_WEB_OR_MAIN_CLIENT_ID>
     GOOGLE_ANDROID_CLIENT_ID=<YOUR_GOOGLE_ANDROID_CLIENT_ID>
     GOOGLE_IOS_CLIENT_ID=<YOUR_GOOGLE_IOS_CLIENT_ID>
 
-    # ----------------------------------
     # Email Service
-    # ----------------------------------
     EMAIL_HOST=<YOUR_SMTP_HOST> # Contoh: smtp.gmail.com
     EMAIL_PORT=<YOUR_SMTP_PORT> # Contoh: 465 (SSL) atau 587 (TLS)
     EMAIL_SECURE=true # 'true' jika port 465, 'false' jika 587
@@ -92,22 +82,16 @@ Backend ini terdiri dari beberapa layanan independen yang bekerja sama untuk men
     EMAIL_FROM="no-reply@yourdomain.com" # Email pengirim
     EMAIL_FROM_NAME="TemanDifa App" # Nama pengirim
 
-    # ----------------------------------
     # Agora Credentials (Dari Agora Console)
-    # ----------------------------------
     AGORA_APP_ID=<YOUR_AGORA_APP_ID>
     AGORA_APP_CERTIFICATE=<YOUR_AGORA_APP_CERTIFICATE>
 
-    # ----------------------------------
     # Microservice URLs (HANYA BASE URL, nama service dari docker-compose)
-    # ----------------------------------
     YOLO_DETECTOR_URL=http://yolo-detector:5001
     VOICE_TRANSCRIBER_URL=http://voice-transcriber:5002
     OCR_SERVICE_URL=http://ocr-service:5003
 
-    # ----------------------------------
     # Frontend URLs (Sesuaikan dengan URL frontend)
-    # ----------------------------------
     FRONTEND_URL=http://localhost:8081 # Untuk link reset password
     CORS_ORIGIN=http://localhost:8081  # Untuk middleware CORS API
     CLIENT_URL=http://localhost:8081   # Untuk CORS Socket.IO
@@ -173,35 +157,3 @@ Semua *endpoint* berada di bawah *prefix* `/api/v1`. Rute yang ditandai dengan �
 | `GET`    | `/contacts/:id` 🔒            | Mendapatkan detail kontak darurat spesifik.             | ✅ Selesai    |
 | `PUT`    | `/contacts/:id` 🔒            | Memperbarui kontak darurat.                             | ✅ Selesai    |
 | `DELETE` | `/contacts/:id` 🔒            | Menghapus kontak darurat.                               | ✅ Selesai    |
-
-## 🏗️ Struktur Proyek
-
-````
-
-temandifa-backend/
-├── base/                 \# Base Docker image untuk Python services
-├── grafana/              \# Konfigurasi Grafana (provisioning)
-├── ocr\_service/         \# Microservice OCR (Python/Flask)
-├── prometheus/           \# Konfigurasi Prometheus
-├── src/                  \# Source code API Gateway (Node.js)
-│   ├── api/v1/
-│   │   ├── controllers/  \# Logika request/response
-│   │   ├── models/       \# Skema Mongoose (User, Session, Contact)
-│   │   ├── routes/       \# Definisi endpoint API (auth, call, contact, user, AI proxy)
-│   │   └── services/     \# Logika bisnis (auth, call, contact, email, notification)
-│   ├── config/           \# Konfigurasi (db, redis, logger, services, metrics)
-│   ├── docs/             \# Dokumentasi OpenAPI/Swagger (YAML)
-│   │   ├── openapi.yaml  \# File utama
-│   │   └── paths/        \# Definisi path per fitur (\*.yaml)
-│   ├── middleware/       \# Middleware (auth, error, upload, validators)
-│   └── socket/           \# Logika WebSocket (Socket.IO)
-├── voice\_transcriber/   \# Microservice Transkripsi (Python/Flask)
-├── yolo\_detector/       \# Microservice Deteksi Objek (Python/Flask)
-├── .env                  \# (BUAT SENDIRI) Variabel lingkungan
-├── .dockerignore
-├── .gitignore
-├── docker-compose.yml    \# Orkestrasi Docker
-├── Dockerfile            \# Dockerfile untuk API Gateway
-├── index.js              \# Titik masuk API Gateway
-├── package.json
-└── README.md             \# File ini
