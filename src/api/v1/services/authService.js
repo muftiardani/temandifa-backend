@@ -537,7 +537,7 @@ const resetPassword = async (token, password, req) => {
 /**
  * Mendapatkan semua sesi aktif untuk user.
  * @param {string} userId - ID user.
- * @param {object} req - Objek request Express (untuk logging).
+ * @param {object} req - Objek request Express (yang berisi req.sessionId).
  * @returns {Promise<Array<object>>} - Daftar sesi.
  */
 const getUserSessions = async (userId, req) => {
@@ -567,7 +567,7 @@ const getUserSessions = async (userId, req) => {
  * Menghapus (revoke) sesi spesifik milik user.
  * @param {string} sessionId - ID sesi yang akan dihapus.
  * @param {string} userId - ID user yang meminta (untuk verifikasi kepemilikan).
- * @param {object} req - Objek request Express (untuk logging).
+ * @param {object} req - Objek request Express (yang berisi req.sessionId).
  * @returns {Promise<void>}
  */
 const revokeSession = async (sessionId, userId, req) => {
