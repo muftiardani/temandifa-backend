@@ -32,7 +32,11 @@ services:
   yolo-detector:
     build:
       context: .
-      dockerfile: ./yolo_detector/Dockerfile
+      dockerfile: ./Dockerfile.python-service
+      args:
+        SERVICE_DIR: yolo_detector
+        SYSTEM_DEPS: "libgl1-mesa-glx libglib2.0-0"
+        PORT: 5001
     container_name: yolo-detector
     restart: unless-stopped
     ports:
@@ -47,7 +51,11 @@ services:
   voice-transcriber:
     build:
       context: .
-      dockerfile: ./voice_transcriber/Dockerfile
+      dockerfile: ./Dockerfile.python-service
+      args:
+        SERVICE_DIR: voice_transcriber
+        SYSTEM_DEPS: "ffmpeg"
+        PORT: 5002
     container_name: voice-transcriber
     restart: unless-stopped
     ports:
@@ -62,7 +70,11 @@ services:
   ocr-service:
     build:
       context: .
-      dockerfile: ./ocr_service/Dockerfile
+      dockerfile: ./Dockerfile.python-service
+      args:
+        SERVICE_DIR: ocr_service
+        SYSTEM_DEPS: "tesseract-ocr tesseract-ocr-ind"
+        PORT: 5003
     container_name: ocr-service
     restart: unless-stopped
     ports:

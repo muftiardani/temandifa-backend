@@ -117,25 +117,37 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: ./yolo_detector/Dockerfile
+          file: ./Dockerfile.python-service
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-yolo:latest
+          build-args: |
+            SERVICE_DIR=yolo_detector
+            SYSTEM_DEPS=libgl1-mesa-glx libglib2.0-0
+            PORT=5001
 
       - name: Build and push Voice Transcriber
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: ./voice_transcriber/Dockerfile
+          file: ./Dockerfile.python-service
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-transcriber:latest
+          build-args: |
+            SERVICE_DIR=voice_transcriber
+            SYSTEM_DEPS=ffmpeg
+            PORT=5002
 
       - name: Build and push OCR Service
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: ./ocr_service/Dockerfile
+          file: ./Dockerfile.python-service
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-ocr:latest
+          build-args: |
+            SERVICE_DIR=ocr_service
+            SYSTEM_DEPS=tesseract-ocr tesseract-ocr-ind
+            PORT=5003
 
       - name: Set up Trivy and Scan Images
         uses: aquasecurity/trivy-action@master

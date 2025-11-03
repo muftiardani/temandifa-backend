@@ -7,8 +7,6 @@ const {
 const config = require("../config/appConfig");
 const appEmitter = require("../events/appEmitter");
 
-const userSocketMap = new Map();
-
 /**
  * Menginisialisasi listener Socket.IO dan Emitter internal.
  * @param {object} io - Instance Server Socket.IO yang didapat dari index.js.
@@ -66,12 +64,17 @@ const initializeSocket = (io) => {
       null
     );
 
-    userSocketMap.set(userId, socketId);
-    logWithContext("debug", `User-Socket map updated on connect`, null, {
-      userId,
-      socketId,
-      mapSize: userSocketMap.size,
-    });
+    socket.join(userId);
+
+    logWithContext(
+      "debug",
+      `Socket ${socketId} joined user room: ${userId}`,
+      null,
+      {
+        userId,
+        socketId,
+      }
+    );
 
     socket.on("cancel-call", ({ callId, calleeId }) => {
       logWithContext(
@@ -81,23 +84,13 @@ const initializeSocket = (io) => {
         { socketId, calleeId }
       );
       if (calleeId) {
-        const calleeSocketId = userSocketMap.get(calleeId);
-        if (calleeSocketId) {
-          io.to(calleeSocketId).emit("call-cancelled", { callId });
-          logWithContext(
-            "info",
-            `[Socket] Sent 'call-cancelled' event to callee ${calleeId}`,
-            null,
-            { callId }
-          );
-        } else {
-          logWithContext(
-            "warn",
-            `[Socket] Callee ${calleeId} not connected, cannot send 'call-cancelled'`,
-            null,
-            { callId }
-          );
-        }
+        io.to(calleeId).emit("call-cancelled", { callId });
+        logWithContext(
+          "info",
+          `[Socket] Sent 'call-cancelled' event to callee room ${calleeId}`,
+          null,
+          { callId }
+        );
       }
     });
 
@@ -112,23 +105,13 @@ const initializeSocket = (io) => {
           callerId,
         }
       );
-      const callerSocketId = userSocketMap.get(callerId);
-      if (callerSocketId) {
-        io.to(callerSocketId).emit("call-declined", { callId });
-        logWithContext(
-          "info",
-          `[Socket] Sent 'call-declined' to caller ${callerId}`,
-          null,
-          { socketId: callerSocketId }
-        );
-      } else {
-        logWithContext(
-          "warn",
-          `[Socket] Caller ${callerId} not connected, cannot send 'call-declined'`,
-          null,
-          { callId }
-        );
-      }
+      io.to(callerId).emit("call-declined", { callId });
+      logWithContext(
+        "info",
+        `[Socket] Sent 'call-declined' to caller room ${callerId}`,
+        null,
+        { callId }
+      );
     });
 
     socket.on("end-call", ({ callId, peerId }) => {
@@ -142,23 +125,13 @@ const initializeSocket = (io) => {
           peerId,
         }
       );
-      const peerSocketId = userSocketMap.get(peerId);
-      if (peerSocketId) {
-        io.to(peerSocketId).emit("call-ended", { callId });
-        logWithContext(
-          "info",
-          `[Socket] Sent 'call-ended' to peer ${peerId}`,
-          null,
-          { socketId: peerSocketId }
-        );
-      } else {
-        logWithContext(
-          "warn",
-          `[Socket] Peer ${peerId} not connected, cannot send 'call-ended'`,
-          null,
-          { callId }
-        );
-      }
+      io.to(peerId).emit("call-ended", { callId });
+      logWithContext(
+        "info",
+        `[Socket] Sent 'call-ended' to peer room ${peerId}`,
+        null,
+        { callId }
+      );
     });
 
     socket.on("disconnect", (reason) => {
@@ -166,21 +139,6 @@ const initializeSocket = (io) => {
         socketId,
         reason,
       });
-      if (userSocketMap.get(userId) === socketId) {
-        userSocketMap.delete(userId);
-        logWithContext(
-          "debug",
-          `User-Socket map updated after disconnect`,
-          null,
-          { userId, socketId, mapSize: userSocketMap.size }
-        );
-      } else {
-        logWithContext(
-          "debug",
-          `User ${userId} disconnected with an old/different socket ID (${socketId}), map not changed.`,
-          null
-        );
-      }
     });
 
     socket.on("error", (error) => {
@@ -192,43 +150,23 @@ const initializeSocket = (io) => {
   });
 
   appEmitter.on("call:answered", ({ callId, callerId, callee }) => {
-    const callerSocketId = userSocketMap.get(callerId);
-    if (callerSocketId) {
-      io.to(callerSocketId).emit("call-answered", { callId, callee });
-      logWithContext(
-        "info",
-        `[Emitter] Sent 'call:answered' via socket to caller ${callerId}`,
-        null,
-        { callId, socketId: callerSocketId }
-      );
-    } else {
-      logWithContext(
-        "warn",
-        `[Emitter] Caller socket not found for user ${callerId}, cannot emit 'call:answered'`,
-        null,
-        { callId }
-      );
-    }
+    io.to(callerId).emit("call-answered", { callId, callee });
+    logWithContext(
+      "info",
+      `[Emitter] Sent 'call:answered' via socket to caller room ${callerId}`,
+      null,
+      { callId }
+    );
   });
 
   appEmitter.on("call:event", ({ eventName, peerId, callId, endedBy }) => {
-    const peerSocketId = userSocketMap.get(peerId);
-    if (peerSocketId) {
-      io.to(peerSocketId).emit(eventName, { callId, endedBy });
-      logWithContext(
-        "info",
-        `[Emitter] Sent '${eventName}' via socket to peer ${peerId}`,
-        null,
-        { callId, socketId: peerSocketId, eventName }
-      );
-    } else {
-      logWithContext(
-        "warn",
-        `[Emitter] Peer socket not found for user ${peerId}, cannot emit '${eventName}'`,
-        null,
-        { callId, eventName }
-      );
-    }
+    io.to(peerId).emit(eventName, { callId, endedBy });
+    logWithContext(
+      "info",
+      `[Emitter] Sent '${eventName}' via socket to peer room ${peerId}`,
+      null,
+      { callId, eventName }
+    );
   });
 
   io.on("error", (error) => {
@@ -244,5 +182,4 @@ const initializeSocket = (io) => {
 
 module.exports = {
   initializeSocket,
-  userSocketMap,
 };

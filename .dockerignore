@@ -7,7 +7,6 @@
 # Mengabaikan folder dependensi dan file log
 node_modules/
 npm-debug.log*
-package-lock.json
 
 # Python
 # Mengabaikan cache, file terkompilasi, dan folder virtual environment

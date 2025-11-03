@@ -1,19 +1,8 @@
 const axios = require("axios");
 const FormData = require("form-data");
 const { logWithContext, errorWithContext } = require("../../../config/logger");
+const asyncHandler = require("express-async-handler");
 
-/**
- * Meneruskan file yang diunggah ke layanan AI internal.
- * Fungsi ini menangani pembuatan FormData, pemanggilan Axios, dan penerusan error.
- *
- * @param {object} req - Objek request Express (harus berisi req.file dan req.id).
- * @param {object} res - Objek response Express.
- * @param {function} next - Fungsi next middleware Express.
- * @param {string} serviceUrl - URL layanan AI tujuan (mis. http://yolo-detector:5001).
- * @param {string} fieldName - Nama field form-data untuk file ('image' atau 'audio').
- * @param {number} timeout - Waktu timeout request dalam milidetik.
- * @param {string} serviceName - Nama layanan AI untuk logging (mis. 'YOLO Detector').
- */
 const forwardFileToAIService = async (
   req,
   res,
@@ -91,6 +80,21 @@ const forwardFileToAIService = async (
   }
 };
 
+const createProxyHandler = (serviceUrl, fieldName, timeout, serviceName) => {
+  return asyncHandler(async (req, res, next) => {
+    await forwardFileToAIService(
+      req,
+      res,
+      next,
+      serviceUrl,
+      fieldName,
+      timeout,
+      serviceName
+    );
+  });
+};
+
 module.exports = {
   forwardFileToAIService,
+  createProxyHandler,
 };

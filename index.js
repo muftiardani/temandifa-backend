@@ -1,6 +1,7 @@
 const config = require("./src/config/appConfig");
 const { Server } = require("socket.io");
 const mongoose = require("mongoose");
+const { createAdapter } = require("@socket.io/redis-adapter");
 
 const connectDB = require("./src/config/db");
 const { redisClient, connectRedis } = require("./src/config/redis");
@@ -18,6 +19,11 @@ const io = new Server(server, {
   },
 });
 
+const pubClient = redisClient.duplicate();
+const subClient = pubClient.duplicate();
+
+io.adapter(createAdapter(pubClient, subClient));
+
 const startServer = async () => {
   try {
     await initializeExpressApp();
@@ -25,10 +31,12 @@ const startServer = async () => {
 
     await connectDB();
     await connectRedis();
-    logger.info("Database and Redis connected.");
+
+    await Promise.all([pubClient.connect(), subClient.connect()]);
+    logger.info("Database, Redis, and Redis Pub/Sub connected.");
 
     initializeSocket(io);
-    logger.info("Socket.IO initialized.");
+    logger.info("Socket.IO initialized with Redis Adapter.");
 
     startMetricsServer();
 
@@ -43,9 +51,14 @@ const startServer = async () => {
         try {
           await mongoose.connection.close(false);
           logger.info("MongoDB connection closed.");
+
           if (redisClient && redisClient.isOpen) {
-            await redisClient.quit();
-            logger.info("Redis connection closed.");
+            await Promise.all([
+              redisClient.quit(),
+              pubClient.quit(),
+              subClient.quit(),
+            ]);
+            logger.info("All Redis connections closed.");
           } else {
             logger.info("Redis connection already closed or not initialized.");
           }

@@ -13,22 +13,29 @@ const googleClient = new OAuth2Client(config.google.clientId);
 /**
  * Menghasilkan Access Token dan Refresh Token untuk user.
  * @param {object} user - Objek user Mongoose (harus memiliki _id dan email).
+ * @param {string} sessionId - ID Sesi dari MongoDB.
  * @returns {{accessToken: string, refreshToken: string}}
  */
-const generateTokens = (user) => {
-  if (!user || !user._id) {
-    throw new Error("User object with _id is required to generate tokens.");
+const generateTokens = (user, sessionId) => {
+  if (!user || !user._id || !sessionId) {
+    throw new Error(
+      "User object (with _id) and sessionId are required to generate tokens."
+    );
   }
 
   const accessToken = jwt.sign(
-    { id: user._id, email: user.email },
+    { id: user._id, email: user.email, sid: sessionId },
     config.jwt.secret,
     { expiresIn: config.jwt.expiresIn }
   );
 
-  const refreshToken = jwt.sign({ id: user._id }, config.jwt.refreshSecret, {
-    expiresIn: config.jwt.refreshExpiresIn,
-  });
+  const refreshToken = jwt.sign(
+    { id: user._id, sid: sessionId },
+    config.jwt.refreshSecret,
+    {
+      expiresIn: config.jwt.refreshExpiresIn,
+    }
+  );
 
   return { accessToken, refreshToken };
 };
@@ -41,8 +48,6 @@ const generateTokens = (user) => {
  * @returns {Promise<{accessToken: string, refreshToken: string}>}
  */
 const createSession = async (user, req, method = "Credentials") => {
-  const { accessToken, refreshToken } = generateTokens(user);
-
   const expiresAt = new Date(Date.now() + config.jwt.refreshExpiresInMs);
 
   const ip = req
@@ -50,24 +55,43 @@ const createSession = async (user, req, method = "Credentials") => {
     : "unknown";
   const userAgent = req ? req.headers["user-agent"] || "Unknown" : "Unknown";
 
+  let newSession;
   try {
-    await Session.create({
+    newSession = await Session.create({
       user: user._id,
-      refreshToken,
+      refreshTokenHash: "PENDING",
       userAgent: `${method} - ${userAgent}`.substring(0, 200),
       ip,
       expiresAt,
       lastActiveAt: Date.now(),
     });
+
+    const sessionId = newSession._id.toString();
+
+    const { accessToken, refreshToken } = generateTokens(user, sessionId);
+
+    const salt = await bcrypt.genSalt(10);
+    const refreshTokenHash = await bcrypt.hash(refreshToken, salt);
+
+    newSession.refreshTokenHash = refreshTokenHash;
+    await newSession.save();
+
     logWithContext("info", `New session created for user ${user._id}`, req, {
       method,
       ip,
+      sessionId,
     });
+
+    return { accessToken, refreshToken };
   } catch (dbError) {
     errorWithContext("Failed to save session to database", dbError, req);
+    if (newSession) {
+      await Session.findByIdAndDelete(newSession._id).catch((delErr) =>
+        errorWithContext("Failed to cleanup partial session", delErr, req)
+      );
+    }
+    throw dbError;
   }
-
-  return { accessToken, refreshToken };
 };
 
 /**
@@ -229,13 +253,11 @@ const loginOrRegisterWithGoogle = async (googleAccessToken, req) => {
 
 /**
  * Memperbarui Access Token menggunakan Refresh Token.
- * @param {string} refreshTokenInput - Refresh token.
+ * @param {string} refreshTokenInput - Refresh token mentah dari klien.
  * @param {object} req - Objek request Express (untuk logging).
  * @returns {Promise<{accessToken: string}>}
  */
 const refreshAccessToken = async (refreshTokenInput, req) => {
-  const session = await Session.findOne({ refreshToken: refreshTokenInput });
-
   let decoded;
   try {
     decoded = jwt.verify(refreshTokenInput, config.jwt.refreshSecret);
@@ -246,23 +268,24 @@ const refreshAccessToken = async (refreshTokenInput, req) => {
       req,
       { error: err.message }
     );
-    if (session) {
-      await session.deleteOne();
-      logWithContext(
-        "info",
-        `Deleted session due to invalid refresh token signature: ${session._id}`,
-        req
-      );
-    }
     const error = new Error("Refresh token tidak valid");
     error.statusCode = 403;
     throw error;
   }
 
-  if (!session) {
+  if (!decoded.sid) {
+    logWithContext("warn", `Refresh token missing session ID (sid)`, req);
+    const error = new Error("Refresh token tidak valid (format lama)");
+    error.statusCode = 403;
+    throw error;
+  }
+
+  const validSession = await Session.findById(decoded.sid);
+
+  if (!validSession || validSession.user.toString() !== decoded.id) {
     logWithContext(
       "warn",
-      `Refresh token used but session not found for user ${decoded?.id}`,
+      `Refresh token valid but session ${decoded.sid} not found or user mismatch`,
       req
     );
     const error = new Error(
@@ -272,11 +295,30 @@ const refreshAccessToken = async (refreshTokenInput, req) => {
     throw error;
   }
 
-  if (session.expiresAt < new Date()) {
-    await session.deleteOne();
+  const isMatch = await bcrypt.compare(
+    refreshTokenInput,
+    validSession.refreshTokenHash
+  );
+
+  if (!isMatch) {
     logWithContext(
       "warn",
-      `Expired refresh token used for user ${decoded?.id}. Session deleted: ${session._id}`,
+      `Refresh token hash mismatch for session ${decoded.sid}`,
+      req
+    );
+    await validSession.deleteOne();
+    const error = new Error(
+      "Sesi tidak valid atau sudah logout, harap login kembali"
+    );
+    error.statusCode = 403;
+    throw error;
+  }
+
+  if (validSession.expiresAt < new Date()) {
+    await validSession.deleteOne();
+    logWithContext(
+      "warn",
+      `Expired refresh token used for user ${decoded?.id}. Session deleted: ${validSession._id}`,
       req
     );
     const error = new Error("Sesi telah kedaluwarsa, harap login kembali");
@@ -284,26 +326,14 @@ const refreshAccessToken = async (refreshTokenInput, req) => {
     throw error;
   }
 
-  if (session.user.toString() !== decoded.id) {
-    logWithContext(
-      "error",
-      `Refresh token user ID mismatch! Token User: ${decoded.id}, Session User: ${session.user}. Session: ${session._id}`,
-      req
-    );
-    await session.deleteOne();
-    const error = new Error("Refresh token tidak cocok dengan sesi");
-    error.statusCode = 403;
-    throw error;
-  }
-
   Session.updateOne(
-    { _id: session._id },
+    { _id: validSession._id },
     { $set: { lastActiveAt: Date.now() } }
   )
     .exec()
     .catch((err) => {
       errorWithContext("Failed to update session lastActiveAt", err, req, {
-        sessionId: session._id,
+        sessionId: validSession._id,
       });
     });
 
@@ -311,16 +341,20 @@ const refreshAccessToken = async (refreshTokenInput, req) => {
   if (!user) {
     logWithContext(
       "error",
-      `User ${decoded.id} not found during token refresh despite valid token. Deleting session ${session._id}`,
+      `User ${decoded.id} not found during token refresh despite valid token. Deleting session ${validSession._id}`,
       req
     );
-    await session.deleteOne();
+    await validSession.deleteOne();
     const error = new Error("Pengguna terkait token tidak ditemukan.");
     error.statusCode = 404;
     throw error;
   }
 
-  const { accessToken } = generateTokens({ _id: user._id, email: user.email });
+  const accessToken = jwt.sign(
+    { id: user._id, email: user.email, sid: decoded.sid },
+    config.jwt.secret,
+    { expiresIn: config.jwt.expiresIn }
+  );
 
   logWithContext("info", `Access token refreshed for user ${decoded.id}`, req);
   return { accessToken };
@@ -328,25 +362,44 @@ const refreshAccessToken = async (refreshTokenInput, req) => {
 
 /**
  * Logout user dengan menghapus sesi terkait refresh token.
- * @param {string} refreshTokenInput - Refresh token.
+ * @param {string} refreshTokenInput - Refresh token mentah dari klien.
  * @param {object} req - Objek request Express (untuk logging).
  * @returns {Promise<void>}
  */
 const logoutUser = async (refreshTokenInput, req) => {
   if (!refreshTokenInput) return;
   try {
-    const result = await Session.deleteOne({ refreshToken: refreshTokenInput });
-    if (result.deletedCount > 0) {
-      logWithContext("info", "Session deleted successfully on logout", req);
+    const decoded = jwt.verify(refreshTokenInput, config.jwt.refreshSecret);
+    if (!decoded.sid || !decoded.id) {
+      throw new Error("Invalid refresh token payload");
+    }
+
+    const session = await Session.findById(decoded.sid);
+
+    if (
+      session &&
+      session.user.toString() === decoded.id &&
+      (await bcrypt.compare(refreshTokenInput, session.refreshTokenHash))
+    ) {
+      await session.deleteOne();
+      logWithContext(
+        "info",
+        `Session ${session._id} deleted successfully on logout`,
+        req
+      );
     } else {
       logWithContext(
         "warn",
-        "Logout attempt with non-existent or already invalidated refresh token",
+        "Logout attempt with non-existent or mismatched refresh token/session",
         req
       );
     }
   } catch (error) {
-    errorWithContext("Error during session deletion on logout", error, req);
+    errorWithContext(
+      "Error during session deletion on logout (e.g., invalid token)",
+      error,
+      req
+    );
   }
 };
 
@@ -488,6 +541,8 @@ const resetPassword = async (token, password, req) => {
  * @returns {Promise<Array<object>>} - Daftar sesi.
  */
 const getUserSessions = async (userId, req) => {
+  const currentSessionId = req.sessionId;
+
   try {
     const sessions = await Session.find({ user: userId })
       .sort({ lastActiveAt: -1 })
@@ -499,7 +554,7 @@ const getUserSessions = async (userId, req) => {
       ip: session.ip || "Unknown IP",
       lastActiveAt: session.lastActiveAt,
       createdAt: session.createdAt,
-      isCurrent: false,
+      isCurrent: session._id.toString() === currentSessionId,
     }));
     return sanitizedSessions;
   } catch (error) {
@@ -516,6 +571,19 @@ const getUserSessions = async (userId, req) => {
  * @returns {Promise<void>}
  */
 const revokeSession = async (sessionId, userId, req) => {
+  if (sessionId === req.sessionId) {
+    logWithContext(
+      "warn",
+      `User ${userId} attempted to revoke their current session`,
+      req
+    );
+    const error = new Error(
+      "Tidak dapat menghapus sesi Anda saat ini. Gunakan logout."
+    );
+    error.statusCode = 400;
+    throw error;
+  }
+
   const session = await Session.findById(sessionId);
 
   if (!session) {

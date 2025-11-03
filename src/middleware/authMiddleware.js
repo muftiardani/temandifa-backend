@@ -24,6 +24,16 @@ const protect = asyncHandler(async (req, res, next) => {
         throw new Error("Otorisasi gagal, pengguna tidak ditemukan");
       }
 
+      req.sessionId = decoded.sid;
+
+      if (!req.sessionId) {
+        logWithContext("warn", "Access token missing session ID (sid)", req, {
+          userIdFromToken: decoded.id,
+        });
+        res.status(401);
+        throw new Error("Otorisasi gagal, token tidak lengkap (sid)");
+      }
+
       logWithContext("debug", `User authorized successfully via token`, req);
       next();
     } catch (error) {
@@ -36,7 +46,7 @@ const protect = asyncHandler(async (req, res, next) => {
       if (error.name === "TokenExpiredError") {
         throw new Error("Otorisasi gagal, token kedaluwarsa");
       } else {
-        throw new Error("Otorisasi gagal, token tidak valid");
+        throw new Error(error.message || "Otorisasi gagal, token tidak valid");
       }
     }
   }

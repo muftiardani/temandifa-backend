@@ -1,8 +1,7 @@
 const express = require("express");
 const { imageUpload, audioUpload } = require("../../../middleware/upload");
-const detectController = require("../controllers/detectController");
-const scanController = require("../controllers/scanController");
-const transcribeController = require("../controllers/transcribeController");
+const { createProxyHandler } = require("../services/aiProxyService");
+const config = require("../../../config/appConfig");
 const authRoutes = require("./authRoutes");
 const callRoutes = require("./callRoutes");
 const contactRoutes = require("./contactRoutes");
@@ -15,8 +14,32 @@ router.use("/call", callRoutes);
 router.use("/contacts", contactRoutes);
 router.use("/users", userRoutes);
 
-router.post("/detect", imageUpload, detectController.detectObjects);
-router.post("/scan", imageUpload, scanController.scanImage);
-router.post("/transcribe", audioUpload, transcribeController.transcribeAudio);
+router.post(
+  "/detect",
+  imageUpload,
+  createProxyHandler(
+    config.serviceUrls.yoloDetector,
+    "image",
+    30000,
+    "YOLO Detector"
+  )
+);
+
+router.post(
+  "/scan",
+  imageUpload,
+  createProxyHandler(config.serviceUrls.ocr, "image", 45000, "OCR Service")
+);
+
+router.post(
+  "/transcribe",
+  audioUpload,
+  createProxyHandler(
+    config.serviceUrls.voiceTranscriber,
+    "audio",
+    90000,
+    "Voice Transcriber"
+  )
+);
 
 module.exports = router;
