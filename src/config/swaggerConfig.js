@@ -4,7 +4,7 @@ const { z } = require("zod");
 
 const {
   OpenApiGeneratorV3,
-  OpenApiRegistry,
+  OpenAPIRegistry,
 } = require("@asteasolutions/zod-to-openapi");
 
 const {
@@ -22,7 +22,7 @@ const {
   mongoIdParamSchema,
 } = require("../middleware/validators");
 
-const registry = new OpenApiRegistry();
+const registry = new OpenAPIRegistry();
 
 const bearerAuth = [{ bearerAuth: [] }];
 
@@ -30,9 +30,11 @@ const ContactSchema = registry.register("Contact", contactSchema.shape.body);
 const SessionSchema = registry.register(
   "Session",
   z.object({
-    id: z.string().openapi({ example: "60c72b2f5f1b2c001f2b9a0c" }),
-    userAgent: z.string().openapi({ example: "Chrome - ...rest" }),
-    ip: z.string().openapi({ example: "127.0.0.1" }),
+    id: z.string().extend({
+      openapi: { example: "60c72b2f5f1b2c001f2b9a0c" },
+    }),
+    userAgent: z.string().extend({ openapi: { example: "Chrome - ...rest" } }),
+    ip: z.string().extend({ openapi: { example: "127.0.0.1" } }),
     lastActiveAt: z.string().format("date-time"),
     createdAt: z.string().format("date-time"),
     isCurrent: z.boolean(),
@@ -41,7 +43,9 @@ const SessionSchema = registry.register(
 const UserProfileSchema = registry.register(
   "UserProfile",
   z.object({
-    _id: z.string().openapi({ example: "60c72b2f5f1b2c001f2b9a0c" }),
+    _id: z.string().extend({
+      openapi: { example: "60c72b2f5f1b2c001f2b9a0c" },
+    }),
     email: z.string().email(),
     googleId: z.string().optional(),
     pushToken: z.string().optional(),

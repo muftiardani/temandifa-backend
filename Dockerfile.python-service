@@ -43,4 +43,4 @@ COPY ${SERVICE_DIR}/ /app/
 COPY common/ /app/common/ 
 
 EXPOSE $PORT
-CMD gunicorn --bind 0.0.0.0:${PORT} --workers ${GUNICORN_WORKERS:-2} --timeout 300 --preload app:app
+CMD ["/bin/sh", "-c", "exec gunicorn --bind 0.0.0.0:${PORT} --workers ${GUNICORN_WORKERS:-2} --timeout 300 --preload app:app"]
