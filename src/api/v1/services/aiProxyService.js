@@ -2,6 +2,30 @@ const axios = require("axios");
 const FormData = require("form-data");
 const { logWithContext, errorWithContext } = require("../../../config/logger");
 const asyncHandler = require("express-async-handler");
+const axiosRetry = require("axios-retry").default;
+
+axiosRetry(axios, {
+  retries: 3,
+  retryDelay: (retryCount, error) => {
+    logWithContext(
+      "warn",
+      `Percobaan ulang ${retryCount} gagal untuk ${error.config.url}`,
+      null,
+      {
+        service: error.config.url,
+        retryCount,
+        errorMessage: error.message,
+      }
+    );
+    return axiosRetry.exponentialDelay(retryCount, error, 100);
+  },
+  retryCondition: (error) => {
+    return (
+      axiosRetry.isNetworkOrIdempotentRequestError(error) ||
+      (error.response && error.response.status >= 500)
+    );
+  },
+});
 
 const forwardFileToAIService = async (
   req,
@@ -72,7 +96,7 @@ const forwardFileToAIService = async (
     res.status(200).json(response.data);
   } catch (error) {
     errorWithContext(
-      `Error communicating with ${serviceName} service`,
+      `Error communicating with ${serviceName} service (after retries)`,
       error,
       req
     );

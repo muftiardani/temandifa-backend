@@ -1,17 +1,47 @@
 const Contact = require("../models/Contact");
 const { logWithContext, errorWithContext } = require("../../../config/logger");
+const { redisClient } = require("../../../config/redis");
+
+const getContactsCacheKey = (userId) => `contacts:${userId}`;
+const CONTACTS_CACHE_TTL = 86400;
 
 const getContactsForUser = async (userId, req = null) => {
   logWithContext("debug", `Fetching contacts for user ${userId}`, req);
+
+  const cacheKey = getContactsCacheKey(userId);
+  try {
+    const cachedContacts = await redisClient.get(cacheKey);
+    if (cachedContacts) {
+      logWithContext(
+        "debug",
+        `Contacts list for user ${userId} found in CACHE`,
+        req
+      );
+      return JSON.parse(cachedContacts);
+    }
+  } catch (cacheError) {
+    errorWithContext("Redis GET error for contacts", cacheError, req);
+  }
+
   try {
     const contacts = await Contact.find({ user: userId })
       .sort({ name: 1 })
       .lean();
+
     logWithContext(
       "debug",
-      `Found ${contacts.length} contacts for user ${userId}`,
+      `Found ${contacts.length} contacts for user ${userId} from DB`,
       req
     );
+
+    try {
+      redisClient.set(cacheKey, JSON.stringify(contacts), {
+        EX: CONTACTS_CACHE_TTL,
+      });
+    } catch (cacheError) {
+      errorWithContext("Redis SET error for contacts", cacheError, req);
+    }
+
     return contacts;
   } catch (error) {
     errorWithContext(
@@ -42,6 +72,13 @@ const addContact = async (userId, contactData, req = null) => {
       phoneNumber,
     });
     const savedContact = await contact.save();
+
+    try {
+      await redisClient.del(getContactsCacheKey(userId));
+    } catch (cacheError) {
+      errorWithContext("Redis DEL error after adding contact", cacheError, req);
+    }
+
     logWithContext(
       "info",
       `Contact added successfully for user ${userId}: ${savedContact._id}`,
@@ -105,6 +142,17 @@ const updateContact = async (contactId, userId, updateData, req = null) => {
     }
 
     const updatedContact = await contact.save();
+
+    try {
+      await redisClient.del(getContactsCacheKey(userId));
+    } catch (cacheError) {
+      errorWithContext(
+        "Redis DEL error after updating contact",
+        cacheError,
+        req
+      );
+    }
+
     logWithContext(
       "info",
       `Contact ${contactId} updated successfully by user ${userId}`,
@@ -166,6 +214,17 @@ const deleteContact = async (contactId, userId, req = null) => {
     }
 
     await contact.deleteOne();
+
+    try {
+      await redisClient.del(getContactsCacheKey(userId));
+    } catch (cacheError) {
+      errorWithContext(
+        "Redis DEL error after deleting contact",
+        cacheError,
+        req
+      );
+    }
+
     logWithContext(
       "info",
       `Contact ${contactId} deleted successfully by user ${userId}`,

@@ -4,6 +4,10 @@ const User = require("../api/v1/models/User");
 const Session = require("../api/v1/models/Session");
 const { logWithContext, errorWithContext } = require("../config/logger");
 const config = require("../config/appConfig");
+const { redisClient } = require("../config/redis");
+
+const getUserProfileCacheKey = (userId) => `user_profile:${userId}`;
+const USER_PROFILE_CACHE_TTL = 3600;
 
 const protect = asyncHandler(async (req, res, next) => {
   let token;
@@ -23,8 +27,35 @@ const protect = asyncHandler(async (req, res, next) => {
         throw new Error("Otorisasi gagal, token tidak lengkap (sid)");
       }
 
+      const userCacheKey = getUserProfileCacheKey(decoded.id);
+
+      try {
+        const cachedUser = await redisClient.get(userCacheKey);
+        if (cachedUser) {
+          const user = JSON.parse(cachedUser);
+
+          const validSession = await Session.findById(decoded.sid)
+            .select("_id")
+            .lean();
+
+          if (validSession) {
+            req.user = user;
+            req.sessionId = decoded.sid;
+            logWithContext(
+              "debug",
+              `User authorized successfully from CACHE`,
+              req
+            );
+            return next();
+          }
+          await redisClient.del(userCacheKey);
+        }
+      } catch (cacheError) {
+        errorWithContext("Redis GET error during auth", cacheError, req);
+      }
+
       const [user, validSession] = await Promise.all([
-        User.findById(decoded.id).select("-password"),
+        User.findById(decoded.id).select("-password").lean(),
         Session.findById(decoded.sid).select("_id").lean(),
       ]);
 
@@ -49,10 +80,18 @@ const protect = asyncHandler(async (req, res, next) => {
         );
       }
 
+      try {
+        await redisClient.set(userCacheKey, JSON.stringify(user), {
+          EX: USER_PROFILE_CACHE_TTL,
+        });
+      } catch (cacheError) {
+        errorWithContext("Redis SET error during auth", cacheError, req);
+      }
+
       req.user = user;
       req.sessionId = decoded.sid;
 
-      logWithContext("debug", `User authorized successfully via token`, req);
+      logWithContext("debug", `User authorized successfully via DB`, req);
       next();
     } catch (error) {
       errorWithContext(

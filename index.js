@@ -1,3 +1,6 @@
+const cluster = require("cluster");
+const os = require("os");
+
 const config = require("./src/config/appConfig");
 const { Server } = require("socket.io");
 const mongoose = require("mongoose");
@@ -26,6 +29,13 @@ io.adapter(createAdapter(pubClient, subClient));
 
 const startServer = async () => {
   try {
+    if (cluster.worker) {
+      logger.defaultMeta = {
+        ...logger.defaultMeta,
+        workerId: cluster.worker.id,
+      };
+    }
+
     await initializeExpressApp();
     logger.info("Express app initialized.");
 
@@ -41,7 +51,9 @@ const startServer = async () => {
     startMetricsServer();
 
     const mainServer = server.listen(PORT, () => {
-      logger.info(`Server running in ${config.nodeEnv} mode on port ${PORT}`);
+      logger.info(
+        `Worker (PID: ${process.pid}) mulai. Server berjalan di ${config.nodeEnv} mode di port ${PORT}`
+      );
     });
 
     const gracefulShutdown = (signal) => {
@@ -111,6 +123,28 @@ const startServer = async () => {
   }
 };
 
-startServer();
+const numCPUs = os.cpus().length;
+
+if (cluster.isPrimary) {
+  logger.info(`Proses Primary (PID: ${process.pid}) berjalan.`);
+  logger.info(`Membuat ${numCPUs} worker...`);
+
+  for (let i = 0; i < numCPUs; i++) {
+    cluster.fork();
+  }
+
+  cluster.on("exit", (worker, code, signal) => {
+    logger.warn(
+      `Worker (PID: ${worker.process.pid}) mati. Code: ${code}, Signal: ${signal}.`,
+      {
+        workerId: worker.id,
+      }
+    );
+    logger.info("Membuat worker baru...");
+    cluster.fork();
+  });
+} else {
+  startServer();
+}
 
 module.exports = { app: require("./src/config/expressApp").app, server, io };

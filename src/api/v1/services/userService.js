@@ -1,5 +1,8 @@
 const User = require("../models/User");
 const { logWithContext, errorWithContext } = require("../../../config/logger");
+const { redisClient } = require("../../../config/redis");
+
+const getUserProfileCacheKey = (userId) => `user_profile:${userId}`;
 
 /**
  * Memperbarui Expo Push Token untuk user.
@@ -26,6 +29,21 @@ const updatePushToken = async (userId, pushToken, req) => {
 
     user.pushToken = pushToken;
     await user.save();
+
+    try {
+      await redisClient.del(getUserProfileCacheKey(userId));
+      logWithContext(
+        "debug",
+        `User profile cache invalidated for user ${userId}`,
+        req
+      );
+    } catch (cacheError) {
+      errorWithContext(
+        "Redis DEL error invalidating user profile cache",
+        cacheError,
+        req
+      );
+    }
 
     logWithContext("info", `Push token updated successfully for user`, req);
     return { success: true, message: "Push token berhasil diperbarui" };
