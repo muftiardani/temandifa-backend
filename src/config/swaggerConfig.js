@@ -500,11 +500,16 @@ const getOpenApiDocumentation = () => {
 
   const generator = new OpenApiGeneratorV3(registry.definitions);
 
-  return {
-    ...baseSpec,
-    ...generator.generateComponents(),
-    paths: generator.generatePaths(),
-  };
+  return generator.generateDocument({
+    openapi: baseSpec.openapi || "3.0.0",
+    info: baseSpec.info || { title: "TemanDifa API", version: "1.0.0" },
+    servers: baseSpec.servers || [{ url: "/api/v1" }],
+    security: baseSpec.security,
+    components: {
+      securitySchemes: baseSpec.components.securitySchemes,
+    },
+    tags: baseSpec.tags,
+  });
 };
 
 module.exports = { getOpenApiDocumentation };
