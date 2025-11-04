@@ -8,6 +8,13 @@ const userSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, trim: true },
     password: { type: String, select: false },
     googleId: { type: String },
+    phoneNumber: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+      index: true,
+    },
     pushToken: { type: String },
     resetPasswordToken: String,
     resetPasswordExpire: Date,

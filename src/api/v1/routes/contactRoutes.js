@@ -18,6 +18,7 @@ router
 
 router
   .route("/:id")
+  .get(validate(mongoIdParamSchema), contactController.getContactById)
   .put(
     validate(mongoIdParamSchema),
     validate(contactSchema),

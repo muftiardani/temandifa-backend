@@ -1,5 +1,9 @@
 const express = require("express");
-const { imageUpload, audioUpload } = require("../../../middleware/upload");
+const {
+  imageUpload,
+  audioUpload,
+  handleMulterError,
+} = require("../../../middleware/upload");
 const { createProxyHandler } = require("../services/aiProxyService");
 const config = require("../../../config/appConfig");
 const authRoutes = require("./authRoutes");
@@ -17,6 +21,7 @@ router.use("/users", userRoutes);
 router.post(
   "/detect",
   imageUpload,
+  handleMulterError,
   createProxyHandler(
     config.serviceUrls.yoloDetector,
     "image",
@@ -28,12 +33,14 @@ router.post(
 router.post(
   "/scan",
   imageUpload,
+  handleMulterError,
   createProxyHandler(config.serviceUrls.ocr, "image", 45000, "OCR Service")
 );
 
 router.post(
   "/transcribe",
   audioUpload,
+  handleMulterError,
   createProxyHandler(
     config.serviceUrls.voiceTranscriber,
     "audio",

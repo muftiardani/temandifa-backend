@@ -1,28 +1,8 @@
-# Terima argumen build
 ARG SERVICE_DIR
 ARG SYSTEM_DEPS=""
 ARG PORT=5000
 
-# Tahap 1: Builder
-FROM temandifa-python-base:latest AS builder
-
-ARG SERVICE_DIR 
-ARG SYSTEM_DEPS
-
-WORKDIR /app
-USER root
-
-RUN if [ -n "$SYSTEM_DEPS" ]; then \
-    apt-get update && apt-get install -y --no-install-recommends $SYSTEM_DEPS && \
-    rm -rf /var/lib/apt/lists/*; \
-    fi
-
-USER appuser
-COPY ${SERVICE_DIR}/requirements.txt requirements.txt 
-COPY common/ /app/common/
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Tahap 2: Final
+# Mulai dari base image yang sudah berisi Python, venv, dan requirements dasar
 FROM temandifa-python-base:latest
 
 ARG SERVICE_DIR
@@ -30,17 +10,22 @@ ARG SYSTEM_DEPS
 ARG PORT
 
 WORKDIR /app
-USER root
 
-RUN if [ -n "$SYSTEM_DEPS" ]; then \
+USER root
+RUN if [ -n "$SYSTEM_DEPS" ]; \
+    then \
     apt-get update && apt-get install -y --no-install-recommends $SYSTEM_DEPS && \
     rm -rf /var/lib/apt/lists/*; \
     fi
 
 USER appuser
-COPY --from=builder /opt/venv /opt/venv
+
+COPY ${SERVICE_DIR}/requirements.txt requirements.txt 
+RUN pip install --no-cache-dir -r requirements.txt
+
 COPY ${SERVICE_DIR}/ /app/
 COPY common/ /app/common/ 
 
 EXPOSE $PORT
-CMD ["/bin/sh", "-c", "exec gunicorn --bind 0.0.0.0:${PORT} --workers ${GUNICORN_WORKERS:-2} --timeout 300 --preload app:app"]
+
+CMD ["/bin/sh", "-c", "exec gunicorn --bind 0.0.0.0:${PORT} --workers ${GUNICORN_WORKERS:-2} --threads 4 --worker-class gthread --timeout 300 --preload app:app"]

@@ -304,6 +304,25 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: "get",
+  path: "/contacts/{id}",
+  summary: "Get a specific emergency contact",
+  tags: ["Contacts"],
+  security: bearerAuth,
+  request: {
+    params: mongoIdParamSchema.shape.params,
+  },
+  responses: {
+    200: {
+      description: "Contact details",
+      content: { "application/json": { schema: ContactSchema } },
+    },
+    401: { description: "Unauthorized" },
+    404: { description: "Contact not found" },
+  },
+});
+
+registry.registerPath({
   method: "post",
   path: "/call/initiate",
   summary: "Initiate a new video call",

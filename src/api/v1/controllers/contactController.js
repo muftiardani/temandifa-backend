@@ -14,6 +14,19 @@ exports.getContacts = asyncHandler(async (req, res, next) => {
   res.status(200).json(contacts);
 });
 
+exports.getContactById = asyncHandler(async (req, res, next) => {
+  const userId = req.user.id;
+  const contactId = req.params.id;
+
+  logWithContext("info", `Fetching contact by ID: ${contactId}`, req);
+
+  const contact = await contactService.getContactById(userId, contactId, req);
+
+  logWithContext("info", `Contact ${contactId} fetched successfully`, req);
+
+  res.status(200).json(contact);
+});
+
 exports.addContact = asyncHandler(async (req, res, next) => {
   const userId = req.user.id;
   const { name, phoneNumber } = req.body;
