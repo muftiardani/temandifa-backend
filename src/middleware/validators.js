@@ -1,4 +1,8 @@
 const { z, ZodError } = require("zod");
+const { extendZodWithOpenApi } = require("@asteasolutions/zod-to-openapi");
+
+extendZodWithOpenApi(z);
+
 const { logWithContext, errorWithContext } = require("../config/logger");
 
 const validate = (schema) => (req, res, next) => {

@@ -5,7 +5,10 @@ const { z } = require("zod");
 const {
   OpenApiGeneratorV3,
   OpenAPIRegistry,
+  extendZodWithOpenApi,
 } = require("@asteasolutions/zod-to-openapi");
+
+extendZodWithOpenApi(z);
 
 const {
   registerSchema,
@@ -30,27 +33,27 @@ const ContactSchema = registry.register("Contact", contactSchema.shape.body);
 const SessionSchema = registry.register(
   "Session",
   z.object({
-    id: z.string().extend({
-      openapi: { example: "60c72b2f5f1b2c001f2b9a0c" },
+    id: z.string().openapi({
+      example: "60c72b2f5f1b2c001f2b9a0c",
     }),
-    userAgent: z.string().extend({ openapi: { example: "Chrome - ...rest" } }),
-    ip: z.string().extend({ openapi: { example: "127.0.0.1" } }),
-    lastActiveAt: z.string().format("date-time"),
-    createdAt: z.string().format("date-time"),
+    userAgent: z.string().openapi({ example: "Chrome - ...rest" }),
+    ip: z.string().openapi({ example: "127.0.0.1" }),
+    lastActiveAt: z.string().openapi({ format: "date-time" }),
+    createdAt: z.string().openapi({ format: "date-time" }),
     isCurrent: z.boolean(),
   })
 );
 const UserProfileSchema = registry.register(
   "UserProfile",
   z.object({
-    _id: z.string().extend({
-      openapi: { example: "60c72b2f5f1b2c001f2b9a0c" },
+    _id: z.string().openapi({
+      example: "60c72b2f5f1b2c001f2b9a0c",
     }),
     email: z.string().email(),
     googleId: z.string().optional(),
     pushToken: z.string().optional(),
-    createdAt: z.string().format("date-time"),
-    updatedAt: z.string().format("date-time"),
+    createdAt: z.string().openapi({ format: "date-time" }),
+    updatedAt: z.string().openapi({ format: "date-time" }),
   })
 );
 
@@ -411,10 +414,10 @@ registry.registerPath({
 });
 
 const multipartFormSchema = z.object({
-  image: z.string().format("binary"),
+  image: z.string().openapi({ format: "binary" }),
 });
 const audioFormSchema = z.object({
-  audio: z.string().format("binary"),
+  audio: z.string().openapi({ format: "binary" }),
 });
 
 registry.registerPath({
