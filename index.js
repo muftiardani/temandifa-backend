@@ -144,6 +144,15 @@ if (cluster.isPrimary) {
     cluster.fork();
   });
 } else {
+  if (cluster.worker.id === 1) {
+    logger.info(
+      `Worker ${cluster.worker.id} (PID: ${process.pid}) is starting the notification receipt checker.`
+    );
+    setTimeout(() => {
+      require("./src/api/v1/services/notificationService").startReceiptProcessing();
+    }, 5000);
+  }
+
   startServer();
 }
 
