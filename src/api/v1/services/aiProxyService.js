@@ -1,5 +1,6 @@
 const axios = require("axios");
 const FormData = require("form-data");
+const fs = require("fs");
 const { logWithContext, errorWithContext } = require("../../../config/logger");
 const asyncHandler = require("express-async-handler");
 const axiosRetry = require("axios-retry").default;
@@ -48,14 +49,17 @@ const forwardFileToAIService = async (
     return next(new Error(`File ${fieldName} tidak ditemukan.`));
   }
 
+  const tempFilePath = req.file.path;
+
   logWithContext(
     "debug",
-    `Processing ${fieldName} for ${serviceName}: ${req.file.originalname} (${req.file.mimetype}, ${req.file.size} bytes)`,
+    `Processing ${fieldName} for ${serviceName}: ${req.file.originalname} (Stored at: ${tempFilePath})`,
     req
   );
 
   const formData = new FormData();
-  formData.append(fieldName, req.file.buffer, {
+
+  formData.append(fieldName, fs.createReadStream(tempFilePath), {
     filename: req.file.originalname,
     contentType: req.file.mimetype,
   });
@@ -101,6 +105,22 @@ const forwardFileToAIService = async (
       req
     );
     next(error);
+  } finally {
+    fs.unlink(tempFilePath, (err) => {
+      if (err) {
+        errorWithContext(
+          `Failed to delete temp upload file: ${tempFilePath}`,
+          err,
+          req
+        );
+      } else {
+        logWithContext(
+          "debug",
+          `Temp upload file deleted: ${tempFilePath}`,
+          req
+        );
+      }
+    });
   }
 };
 

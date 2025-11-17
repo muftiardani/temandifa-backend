@@ -7,8 +7,11 @@ const Session = require("../models/Session");
 const { logWithContext, errorWithContext } = require("../../../config/logger");
 const sendEmail = require("./emailService");
 const config = require("../../../config/appConfig");
+const { redisClient } = require("../../../config/redis");
 
 const googleClient = new OAuth2Client(config.google.clientId);
+
+const getSessionCacheKey = (sessionId) => `session_valid:${sessionId}`;
 
 /**
  * Menghasilkan Access Token dan Refresh Token untuk user.
@@ -76,6 +79,10 @@ const createSession = async (user, req, method = "Credentials") => {
     newSession.refreshTokenHash = refreshTokenHash;
     await newSession.save();
 
+    await redisClient.set(getSessionCacheKey(sessionId), "1", {
+      EX: Math.floor(config.jwt.refreshExpiresInMs / 1000),
+    });
+
     logWithContext("info", `New session created for user ${user._id}`, req, {
       method,
       ip,
@@ -89,6 +96,7 @@ const createSession = async (user, req, method = "Credentials") => {
       await Session.findByIdAndDelete(newSession._id).catch((delErr) =>
         errorWithContext("Failed to cleanup partial session", delErr, req)
       );
+      await redisClient.del(getSessionCacheKey(newSession._id.toString()));
     }
     throw dbError;
   }
@@ -96,11 +104,6 @@ const createSession = async (user, req, method = "Credentials") => {
 
 /**
  * Mendaftarkan user baru.
- * @param {object} data - Data registrasi.
- * @param {string} data.email - Email user.
- * @param {string} data.password - Password user.
- * @param {object} req - Objek request Express (untuk logging).
- * @returns {Promise<{user: object, accessToken: string, refreshToken: string}>}
  */
 const registerUser = async ({ email, password }, req) => {
   if (!email || !password) {
@@ -138,10 +141,6 @@ const registerUser = async ({ email, password }, req) => {
 
 /**
  * Login user dengan email/username dan password.
- * @param {string} loginInput - Email atau username.
- * @param {string} password - Password.
- * @param {object} req - Objek request Express.
- * @returns {Promise<{user: object, accessToken: string, refreshToken: string}>}
  */
 const loginUser = async (loginInput, password, req) => {
   if (!loginInput || !password) {
@@ -175,9 +174,6 @@ const loginUser = async (loginInput, password, req) => {
 
 /**
  * Login atau registrasi user menggunakan Google Access Token (ID Token).
- * @param {string} googleAccessToken - Google ID Token.
- * @param {object} req - Objek request Express.
- * @returns {Promise<{user: object, accessToken: string, refreshToken: string}>}
  */
 const loginOrRegisterWithGoogle = async (googleAccessToken, req) => {
   try {
@@ -253,9 +249,6 @@ const loginOrRegisterWithGoogle = async (googleAccessToken, req) => {
 
 /**
  * Memperbarui Access Token menggunakan Refresh Token.
- * @param {string} refreshTokenInput - Refresh token mentah dari klien.
- * @param {object} req - Objek request Express (untuk logging).
- * @returns {Promise<{accessToken: string}>}
  */
 const refreshAccessToken = async (refreshTokenInput, req) => {
   let decoded;
@@ -283,6 +276,7 @@ const refreshAccessToken = async (refreshTokenInput, req) => {
   const validSession = await Session.findById(decoded.sid);
 
   if (!validSession || validSession.user.toString() !== decoded.id) {
+    await redisClient.del(getSessionCacheKey(decoded.sid));
     logWithContext(
       "warn",
       `Refresh token valid but session ${decoded.sid} not found or user mismatch`,
@@ -307,6 +301,7 @@ const refreshAccessToken = async (refreshTokenInput, req) => {
       req
     );
     await validSession.deleteOne();
+    await redisClient.del(getSessionCacheKey(decoded.sid));
     const error = new Error(
       "Sesi tidak valid atau sudah logout, harap login kembali"
     );
@@ -316,6 +311,7 @@ const refreshAccessToken = async (refreshTokenInput, req) => {
 
   if (validSession.expiresAt < new Date()) {
     await validSession.deleteOne();
+    await redisClient.del(getSessionCacheKey(decoded.sid));
     logWithContext(
       "warn",
       `Expired refresh token used for user ${decoded?.id}. Session deleted: ${validSession._id}`,
@@ -345,6 +341,7 @@ const refreshAccessToken = async (refreshTokenInput, req) => {
       req
     );
     await validSession.deleteOne();
+    await redisClient.del(getSessionCacheKey(decoded.sid));
     const error = new Error("Pengguna terkait token tidak ditemukan.");
     error.statusCode = 404;
     throw error;
@@ -362,9 +359,6 @@ const refreshAccessToken = async (refreshTokenInput, req) => {
 
 /**
  * Logout user dengan menghapus sesi terkait refresh token.
- * @param {string} refreshTokenInput - Refresh token mentah dari klien.
- * @param {object} req - Objek request Express (untuk logging).
- * @returns {Promise<void>}
  */
 const logoutUser = async (refreshTokenInput, req) => {
   if (!refreshTokenInput) return;
@@ -382,6 +376,9 @@ const logoutUser = async (refreshTokenInput, req) => {
       (await bcrypt.compare(refreshTokenInput, session.refreshTokenHash))
     ) {
       await session.deleteOne();
+
+      await redisClient.del(getSessionCacheKey(decoded.sid));
+
       logWithContext(
         "info",
         `Session ${session._id} deleted successfully on logout`,
@@ -405,9 +402,6 @@ const logoutUser = async (refreshTokenInput, req) => {
 
 /**
  * Memproses permintaan lupa password dan mengirim email.
- * @param {string} email - Email user.
- * @param {object} req - Objek request Express (untuk logging).
- * @returns {Promise<string>} - Pesan sukses.
  */
 const forgotPassword = async (email, req) => {
   if (!email) {
@@ -470,10 +464,6 @@ const forgotPassword = async (email, req) => {
 
 /**
  * Mereset password user menggunakan token.
- * @param {string} token - Token reset dari URL.
- * @param {string} password - Password baru.
- * @param {object} req - Objek request Express (untuk logging).
- * @returns {Promise<void>}
  */
 const resetPassword = async (token, password, req) => {
   if (!token || !password) {
@@ -516,10 +506,25 @@ const resetPassword = async (token, password, req) => {
   }
 
   try {
+    const sessions = await Session.find({ user: user._id })
+      .select("_id")
+      .lean();
+    if (sessions.length > 0) {
+      const sessionKeys = sessions.map((s) =>
+        getSessionCacheKey(s._id.toString())
+      );
+      await redisClient.del(sessionKeys);
+      logWithContext(
+        "debug",
+        `Deleted ${sessionKeys.length} session caches from Redis after password reset`,
+        req
+      );
+    }
+
     const deletedSessions = await Session.deleteMany({ user: user._id });
     logWithContext(
       "info",
-      `Deleted ${deletedSessions.deletedCount} sessions for user ${user.id} after password reset`,
+      `Deleted ${deletedSessions.deletedCount} sessions from DB for user ${user.id} after password reset`,
       req
     );
   } catch (sessionError) {
@@ -536,9 +541,6 @@ const resetPassword = async (token, password, req) => {
 
 /**
  * Mendapatkan semua sesi aktif untuk user.
- * @param {string} userId - ID user.
- * @param {object} req - Objek request Express (yang berisi req.sessionId).
- * @returns {Promise<Array<object>>} - Daftar sesi.
  */
 const getUserSessions = async (userId, req) => {
   const currentSessionId = req.sessionId;
@@ -565,10 +567,6 @@ const getUserSessions = async (userId, req) => {
 
 /**
  * Menghapus (revoke) sesi spesifik milik user.
- * @param {string} sessionId - ID sesi yang akan dihapus.
- * @param {string} userId - ID user yang meminta (untuk verifikasi kepemilikan).
- * @param {object} req - Objek request Express (yang berisi req.sessionId).
- * @returns {Promise<void>}
  */
 const revokeSession = async (sessionId, userId, req) => {
   if (sessionId === req.sessionId) {
@@ -605,6 +603,9 @@ const revokeSession = async (sessionId, userId, req) => {
 
   try {
     await session.deleteOne();
+
+    await redisClient.del(getSessionCacheKey(sessionId));
+
     logWithContext(
       "info",
       `Session ${sessionId} revoked by user ${userId}`,

@@ -3,6 +3,8 @@ const { logWithContext, errorWithContext } = require("../../../config/logger");
 const { redisClient } = require("../../../config/redis");
 
 const getContactsCacheKey = (userId) => `contacts:${userId}`;
+const getContactCacheKey = (contactId) => `contact:${contactId}`;
+const CONTACT_DETAIL_CACHE_TTL = 3600;
 const CONTACTS_CACHE_TTL = 86400;
 
 const getContactsForUser = async (userId, req = null) => {
@@ -74,9 +76,20 @@ const addContact = async (userId, contactData, req = null) => {
     const savedContact = await contact.save();
 
     try {
-      await redisClient.del(getContactsCacheKey(userId));
+      const multi = redisClient.multi();
+      multi.del(getContactsCacheKey(userId));
+      multi.set(
+        getContactCacheKey(savedContact._id.toString()),
+        JSON.stringify(savedContact.toObject()),
+        { EX: CONTACT_DETAIL_CACHE_TTL }
+      );
+      await multi.exec();
     } catch (cacheError) {
-      errorWithContext("Redis DEL error after adding contact", cacheError, req);
+      errorWithContext(
+        "Redis DEL/SET error after adding contact",
+        cacheError,
+        req
+      );
     }
 
     logWithContext(
@@ -95,7 +108,9 @@ const addContact = async (userId, contactData, req = null) => {
       throw validationError;
     }
     if (error.code === 11000) {
-      const duplicateError = new Error("Kontak dengan detail ini sudah ada.");
+      const duplicateError = new Error(
+        "Kontak dengan nomor telepon ini sudah ada untuk Anda."
+      );
       duplicateError.statusCode = 409;
       throw duplicateError;
     }
@@ -144,10 +159,17 @@ const updateContact = async (contactId, userId, updateData, req = null) => {
     const updatedContact = await contact.save();
 
     try {
-      await redisClient.del(getContactsCacheKey(userId));
+      const multi = redisClient.multi();
+      multi.del(getContactsCacheKey(userId));
+      multi.set(
+        getContactCacheKey(contactId),
+        JSON.stringify(updatedContact.toObject()),
+        { EX: CONTACT_DETAIL_CACHE_TTL }
+      );
+      await multi.exec();
     } catch (cacheError) {
       errorWithContext(
-        "Redis DEL error after updating contact",
+        "Redis DEL/SET error after updating contact",
         cacheError,
         req
       );
@@ -216,7 +238,10 @@ const deleteContact = async (contactId, userId, req = null) => {
     await contact.deleteOne();
 
     try {
-      await redisClient.del(getContactsCacheKey(userId));
+      const multi = redisClient.multi();
+      multi.del(getContactsCacheKey(userId));
+      multi.del(getContactCacheKey(contactId));
+      await multi.exec();
     } catch (cacheError) {
       errorWithContext(
         "Redis DEL error after deleting contact",
@@ -250,11 +275,27 @@ const getContactById = async (userId, contactId, req = null) => {
     `Fetching contact by ID ${contactId} for user ${userId}`,
     req
   );
+
+  const cacheKey = getContactCacheKey(contactId);
+  try {
+    const cachedContact = await redisClient.get(cacheKey);
+    if (cachedContact) {
+      const contact = JSON.parse(cachedContact);
+      if (contact.user && contact.user.toString() === userId) {
+        logWithContext("debug", `Contact ${contactId} found in CACHE`, req);
+        return contact;
+      }
+    }
+  } catch (cacheError) {
+    errorWithContext("Redis GET error for contact detail", cacheError, req);
+  }
+
   try {
     const contact = await Contact.findOne({
       _id: contactId,
       user: userId,
     }).lean();
+
     if (!contact) {
       logWithContext(
         "warn",
@@ -269,9 +310,18 @@ const getContactById = async (userId, contactId, req = null) => {
     }
     logWithContext(
       "debug",
-      `Contact ${contactId} found for user ${userId}`,
+      `Contact ${contactId} found for user ${userId} from DB`,
       req
     );
+
+    try {
+      await redisClient.set(cacheKey, JSON.stringify(contact), {
+        EX: CONTACT_DETAIL_CACHE_TTL,
+      });
+    } catch (cacheError) {
+      errorWithContext("Redis SET error for contact detail", cacheError, req);
+    }
+
     return contact;
   } catch (error) {
     errorWithContext(

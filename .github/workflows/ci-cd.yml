@@ -56,14 +56,11 @@ jobs:
           source venv/bin/activate
           pip install --upgrade pip
 
-          # 1. Install dependensi base
           pip install -r base/requirements.txt
 
-          # 2. Install dependensi spesifik layanan (terisolasi)
           echo "Installing dependencies for ${{ matrix.service }}"
           pip install -r ${{ matrix.service }}/requirements.txt
 
-          # 3. Install alat tes
           pip install pytest pytest-mock flake8 pip-audit
 
       - name: Audit Python Dependencies (Isolated)
@@ -75,7 +72,6 @@ jobs:
       - name: Run Python Linters and Tests (Isolated)
         run: |
           source venv/bin/activate
-          # Jalankan pytest hanya untuk direktori layanan yang relevan
           echo "Running tests for ${{ matrix.service }}"
           pytest ${{ matrix.service }}/
 
@@ -97,52 +93,57 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push Python Base Image
+      - name: Build Python Base Image
         uses: docker/build-push-action@v4
         with:
           context: ./base
           file: ./base/Dockerfile
-          push: true
+          push: false
+          load: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-python-base:latest
 
-      - name: Build and push API Gateway
+      - name: Build API Gateway
         uses: docker/build-push-action@v4
         with:
           context: .
           file: ./Dockerfile
-          push: true
+          push: false
+          load: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-gateway:latest
 
-      - name: Build and push YOLO Detector
+      - name: Build YOLO Detector
         uses: docker/build-push-action@v4
         with:
           context: .
           file: ./Dockerfile.python-service
-          push: true
+          push: false
+          load: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-yolo:latest
           build-args: |
             SERVICE_DIR=yolo_detector
             SYSTEM_DEPS=libgl1-mesa-glx libglib2.0-0
             PORT=5001
 
-      - name: Build and push Voice Transcriber
+      - name: Build Voice Transcriber
         uses: docker/build-push-action@v4
         with:
           context: .
           file: ./Dockerfile.python-service
-          push: true
+          push: false
+          load: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-transcriber:latest
           build-args: |
             SERVICE_DIR=voice_transcriber
             SYSTEM_DEPS=ffmpeg
             PORT=5002
 
-      - name: Build and push OCR Service
+      - name: Build OCR Service
         uses: docker/build-push-action@v4
         with:
           context: .
           file: ./Dockerfile.python-service
-          push: true
+          push: false
+          load: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-ocr:latest
           build-args: |
             SERVICE_DIR=ocr_service
@@ -163,6 +164,15 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-yolo:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-transcriber:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-ocr:latest
+
+      - name: Push Images to Docker Hub
+        if: success()
+        run: |
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-python-base:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-gateway:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-yolo:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-transcriber:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/temandifa-ocr:latest
 
   deploy:
     needs: build-scan-and-push

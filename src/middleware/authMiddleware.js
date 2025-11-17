@@ -7,6 +7,7 @@ const config = require("../config/appConfig");
 const { redisClient } = require("../config/redis");
 
 const getUserProfileCacheKey = (userId) => `user_profile:${userId}`;
+const getSessionCacheKey = (sessionId) => `session_valid:${sessionId}`;
 const USER_PROFILE_CACHE_TTL = 3600;
 
 const protect = asyncHandler(async (req, res, next) => {
@@ -28,27 +29,25 @@ const protect = asyncHandler(async (req, res, next) => {
       }
 
       const userCacheKey = getUserProfileCacheKey(decoded.id);
+      const sessionCacheKey = getSessionCacheKey(decoded.sid);
 
       try {
-        const cachedUser = await redisClient.get(userCacheKey);
-        if (cachedUser) {
+        const [cachedUser, cachedSession] = await Promise.all([
+          redisClient.get(userCacheKey),
+          redisClient.get(sessionCacheKey),
+        ]);
+
+        if (cachedUser && cachedSession) {
           const user = JSON.parse(cachedUser);
 
-          const validSession = await Session.findById(decoded.sid)
-            .select("_id")
-            .lean();
-
-          if (validSession) {
-            req.user = user;
-            req.sessionId = decoded.sid;
-            logWithContext(
-              "debug",
-              `User authorized successfully from CACHE`,
-              req
-            );
-            return next();
-          }
-          await redisClient.del(userCacheKey);
+          req.user = user;
+          req.sessionId = decoded.sid;
+          logWithContext(
+            "debug",
+            `User authorized successfully from CACHE (User + Session)`,
+            req
+          );
+          return next();
         }
       } catch (cacheError) {
         errorWithContext("Redis GET error during auth", cacheError, req);
@@ -81,9 +80,14 @@ const protect = asyncHandler(async (req, res, next) => {
       }
 
       try {
-        await redisClient.set(userCacheKey, JSON.stringify(user), {
+        const multi = redisClient.multi();
+        multi.set(userCacheKey, JSON.stringify(user), {
           EX: USER_PROFILE_CACHE_TTL,
         });
+        multi.set(sessionCacheKey, "1", {
+          EX: Math.floor(config.jwt.refreshExpiresInMs / 1000),
+        });
+        await multi.exec();
       } catch (cacheError) {
         errorWithContext("Redis SET error during auth", cacheError, req);
       }

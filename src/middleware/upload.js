@@ -1,4 +1,6 @@
 const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 const { logWithContext, errorWithContext } = require("../config/logger");
 const config = require("../config/appConfig");
 
@@ -22,7 +24,23 @@ const ALLOWED_AUDIO_MIMES = [
   "audio/x-m4a",
 ];
 
-const storage = multer.memoryStorage();
+const tempUploadDir = path.join(__dirname, "../../temp_uploads");
+if (!fs.existsSync(tempUploadDir)) {
+  fs.mkdirSync(tempUploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, tempUploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(
+      null,
+      file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname)
+    );
+  },
+});
 
 const limits = {
   fileSize: config.upload.maxFileSizeBytes,
