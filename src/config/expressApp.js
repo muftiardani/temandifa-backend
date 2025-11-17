@@ -14,19 +14,10 @@ const apiV1Routes = require("../api/v1/routes");
 
 const { getOpenApiDocumentation } = require("./swaggerConfig");
 
+const addRequestId = require("express-request-id");
+
 const app = express();
 const server = http.createServer(app);
-
-const importDynamicModules = async () => {
-  try {
-    const addRequestIdModule = await import("express-request-id");
-    const addRequestId = addRequestIdModule.default();
-    app.use(addRequestId);
-  } catch (err) {
-    logger.error("Gagal mengimpor 'express-request-id'", err);
-    throw err;
-  }
-};
 
 const setupMiddleware = () => {
   app.set("trust proxy", "loopback");
@@ -34,6 +25,8 @@ const setupMiddleware = () => {
   app.use(helmet());
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+
+  app.use(addRequestId());
 
   app.use(
     morgan(config.isProduction ? "combined" : "dev", {
@@ -114,7 +107,6 @@ const setupRoutesAndErrorHandling = () => {
 };
 
 const initializeExpressApp = async () => {
-  await importDynamicModules();
   setupMiddleware();
   setupRateLimiting();
   setupRoutesAndErrorHandling();

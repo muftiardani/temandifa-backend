@@ -54,8 +54,6 @@ Backend ini terdiri dari beberapa layanan independen yang bekerja sama untuk men
 
     ```env
     # Konfigurasi Server
-    PORT=3000
-    METRICS_PORT=9100 # Port untuk Prometheus metrics
     NODE_ENV=development # Ganti ke 'production' saat deployment
 
     # Database & Cache
@@ -65,8 +63,6 @@ Backend ini terdiri dari beberapa layanan independen yang bekerja sama untuk men
     # JWT Secrets (Ganti dengan kunci rahasia yang SANGAT KUAT)
     JWT_SECRET=<YOUR_STRONG_JWT_SECRET>
     JWT_REFRESH_SECRET=<YOUR_DIFFERENT_STRONG_JWT_REFRESH_SECRET>
-    JWT_EXPIRE="15m" # Durasi access token
-    JWT_REFRESH_EXPIRE="7d" # Durasi refresh token
 
     # Google OAuth Credentials (Dari Google Cloud Console)
     GOOGLE_CLIENT_ID=<YOUR_GOOGLE_WEB_OR_MAIN_CLIENT_ID>
@@ -74,27 +70,15 @@ Backend ini terdiri dari beberapa layanan independen yang bekerja sama untuk men
     GOOGLE_IOS_CLIENT_ID=<YOUR_GOOGLE_IOS_CLIENT_ID>
 
     # Email Service
+    EMAIL_FROM_NAME="TemanDifa App" # Nama pengirim
+    EMAIL_FROM="no-reply@yourdomain.com" # Email pengirim
     EMAIL_HOST=<YOUR_SMTP_HOST> # Contoh: smtp.gmail.com
-    EMAIL_PORT=<YOUR_SMTP_PORT> # Contoh: 465 (SSL) atau 587 (TLS)
-    EMAIL_SECURE=true # 'true' jika port 465, 'false' jika 587
     EMAIL_USER=<YOUR_SMTP_USERNAME_OR_EMAIL> # Username/Email SMTP
     EMAIL_PASS=<YOUR_SMTP_PASSWORD_OR_APP_PASSWORD> # Password/App Password SMTP
-    EMAIL_FROM="no-reply@yourdomain.com" # Email pengirim
-    EMAIL_FROM_NAME="TemanDifa App" # Nama pengirim
 
     # Agora Credentials (Dari Agora Console)
     AGORA_APP_ID=<YOUR_AGORA_APP_ID>
     AGORA_APP_CERTIFICATE=<YOUR_AGORA_APP_CERTIFICATE>
-
-    # Microservice URLs (HANYA BASE URL, nama service dari docker-compose)
-    YOLO_DETECTOR_URL=http://yolo-detector:5001
-    VOICE_TRANSCRIBER_URL=http://voice-transcriber:5002
-    OCR_SERVICE_URL=http://ocr-service:5003
-
-    # Frontend URLs (Sesuaikan dengan URL frontend)
-    FRONTEND_URL=http://localhost:8081 # Untuk link reset password
-    CORS_ORIGIN=http://localhost:8081  # Untuk middleware CORS API
-    CLIENT_URL=http://localhost:8081   # Untuk CORS Socket.IO
     ```
 
 3.  **Jalankan Aplikasi:**

@@ -1,3 +1,6 @@
+const { initTracing } = require("./src/config/tracing");
+initTracing("api-gateway");
+
 const cluster = require("cluster");
 const os = require("os");
 

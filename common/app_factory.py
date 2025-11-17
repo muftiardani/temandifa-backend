@@ -1,9 +1,40 @@
 import logging
+import os
 from flask import Flask, jsonify, request
 from werkzeug.exceptions import BadRequest, InternalServerError, UnsupportedMediaType
 from prometheus_flask_exporter import PrometheusMetrics
 
+from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPTraceExporter
+from opentelemetry.instrumentation.flask import FlaskInstrumentor
+
 logger = logging.getLogger(__name__)
+
+def setup_tracing(app_name):
+    """Mengkonfigurasi OpenTelemetry untuk layanan ini."""
+    try:
+        resource = Resource(attributes={
+            "service.name": app_name
+        })
+
+        provider = TracerProvider(resource=resource)
+        trace.set_tracer_provider(provider)
+
+        otlp_endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
+        
+        exporter = OTLPTraceExporter(endpoint=otlp_endpoint, insecure=True)
+        processor = BatchSpanProcessor(exporter)
+        provider.add_span_processor(processor)
+
+        logger.info(f"OpenTelemetry Tracing diinisialisasi untuk [{app_name}]")
+        logger.info(f"Mengirim trace ke OTLP collector di: {otlp_endpoint}")
+
+    except Exception as e:
+        logger.error(f"Gagal menginisialisasi OpenTelemetry Tracing: {e}", exc_info=True)
+
 
 def register_error_handlers(app):
     """Mendaftarkan error handler umum ke aplikasi Flask."""
@@ -49,10 +80,13 @@ def create_app(app_name):
     app = Flask(app_name)
     app.url_map.strict_slashes = False
 
+    setup_tracing(app_name.split('.')[-1])
+    FlaskInstrumentor().instrument_app(app)
+
     metrics = PrometheusMetrics(app, group_by='endpoint')
 
     register_error_handlers(app)
 
-    logger.info(f"Flask app '{app_name}' created with common factory (metrics, error handlers).")
+    logger.info(f"Flask app '{app_name}' created with common factory (metrics, error handlers, tracing).")
     
     return app, metrics

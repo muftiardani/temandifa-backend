@@ -4,3 +4,6 @@ prometheus-flask-exporter
 Pillow
 pytest
 pytest-mock
+opentelemetry-sdk
+opentelemetry-instrumentation-flask
+opentelemetry-exporter-otlp-proto-grpc

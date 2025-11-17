@@ -12,12 +12,15 @@ services:
       - .env
     environment:
       - REDIS_HOST=redis
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
     depends_on:
       - mongo
       - redis
       - yolo-detector
       - voice-transcriber
       - ocr-service
+      - tempo
+      - loki
     networks:
       - temandifa-net
 
@@ -43,8 +46,12 @@ services:
       - "5001:5001"
     env_file:
       - .env
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
     depends_on:
       - python-base-builder
+      - tempo
+      - loki
     networks:
       - temandifa-net
 
@@ -62,8 +69,12 @@ services:
       - "5002:5002"
     env_file:
       - .env
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
     depends_on:
       - python-base-builder
+      - tempo
+      - loki
     networks:
       - temandifa-net
 
@@ -81,8 +92,12 @@ services:
       - "5003:5003"
     env_file:
       - .env
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
     depends_on:
       - python-base-builder
+      - tempo
+      - loki
     networks:
       - temandifa-net
 
@@ -121,6 +136,47 @@ services:
     networks:
       - temandifa-net
 
+  tempo:
+    image: grafana/tempo:latest
+    container_name: temandifa_tempo
+    command: ["-config.file=/etc/tempo.yml"]
+    restart: unless-stopped
+    volumes:
+      - ./tempo/tempo-config.yml:/etc/tempo.yml
+      - tempo-data:/tmp/tempo
+    ports:
+      - "3200:3200"
+      - "4317:4317"
+      - "4318:4318"
+    networks:
+      - temandifa-net
+
+  loki:
+    image: grafana/loki:latest
+    container_name: temandifa_loki
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/local-config.yaml
+      - loki-data:/tmp/loki
+    networks:
+      - temandifa-net
+
+  promtail:
+    image: grafana/promtail:latest
+    container_name: temandifa_promtail
+    command: ["-config.file=/etc/promtail/config.yml"]
+    restart: unless-stopped
+    volumes:
+      - ./promtail/promtail-config.yml:/etc/promtail/config.yml
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - loki
+    networks:
+      - temandifa-net
+
   grafana:
     image: grafana/grafana-oss:latest
     container_name: temandifa_grafana
@@ -131,6 +187,8 @@ services:
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
     depends_on:
       - prometheus
+      - tempo
+      - loki
     networks:
       - temandifa-net
 
@@ -141,3 +199,5 @@ networks:
 volumes:
   mongo-data:
   redis-data:
+  tempo-data: {}
+  loki-data: {}

@@ -5,10 +5,43 @@ const Session = require("../api/v1/models/Session");
 const { logWithContext, errorWithContext } = require("../config/logger");
 const config = require("../config/appConfig");
 const { redisClient } = require("../config/redis");
+const CircuitBreaker = require("opossum");
 
 const getUserProfileCacheKey = (userId) => `user_profile:${userId}`;
 const getSessionCacheKey = (sessionId) => `session_valid:${sessionId}`;
 const USER_PROFILE_CACHE_TTL = 3600;
+
+const redisCircuitOptions = {
+  timeout: 1000,
+  errorThresholdPercentage: 50,
+  resetTimeout: 30000,
+};
+
+const redisGetWrapper = (key) => redisClient.get(key);
+
+const userCacheBreaker = new CircuitBreaker(
+  redisGetWrapper,
+  redisCircuitOptions
+);
+const sessionCacheBreaker = new CircuitBreaker(
+  redisGetWrapper,
+  redisCircuitOptions
+);
+
+userCacheBreaker.on("open", () =>
+  logWithContext(
+    "warn",
+    "Circuit Breaker DIBUKA untuk userCache (Redis). Fallback ke DB.",
+    null
+  )
+);
+userCacheBreaker.on("close", () =>
+  logWithContext(
+    "info",
+    "Circuit Breaker DITUTUP untuk userCache (Redis).",
+    null
+  )
+);
 
 const protect = asyncHandler(async (req, res, next) => {
   let token;
@@ -33,8 +66,8 @@ const protect = asyncHandler(async (req, res, next) => {
 
       try {
         const [cachedUser, cachedSession] = await Promise.all([
-          redisClient.get(userCacheKey),
-          redisClient.get(sessionCacheKey),
+          userCacheBreaker.fire(userCacheKey),
+          sessionCacheBreaker.fire(sessionCacheKey),
         ]);
 
         if (cachedUser && cachedSession) {
@@ -50,7 +83,11 @@ const protect = asyncHandler(async (req, res, next) => {
           return next();
         }
       } catch (cacheError) {
-        errorWithContext("Redis GET error during auth", cacheError, req);
+        errorWithContext(
+          "Redis cache error/unavailable during auth. Degrading to DB.",
+          cacheError,
+          req
+        );
       }
 
       const [user, validSession] = await Promise.all([
@@ -89,7 +126,11 @@ const protect = asyncHandler(async (req, res, next) => {
         });
         await multi.exec();
       } catch (cacheError) {
-        errorWithContext("Redis SET error during auth", cacheError, req);
+        errorWithContext(
+          "Redis SET error during auth (non-critical)",
+          cacheError,
+          req
+        );
       }
 
       req.user = user;

@@ -1,5 +1,6 @@
 const path = require("path");
-const YAML = require("yamljs");
+const fs = require("fs");
+const YAML = require("yaml");
 const { z } = require("zod");
 
 const {
@@ -496,7 +497,11 @@ registry.registerPath({
  * @returns {object} - Objek spesifikasi OpenAPI
  */
 const getOpenApiDocumentation = () => {
-  const baseSpec = YAML.load(path.join(__dirname, "../docs/openapi.yaml"));
+  const yamlFile = fs.readFileSync(
+    path.join(__dirname, "../docs/openapi.yaml"),
+    "utf8"
+  );
+  const baseSpec = YAML.parse(yamlFile);
 
   const generator = new OpenApiGeneratorV3(registry.definitions);
 

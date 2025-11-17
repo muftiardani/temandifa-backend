@@ -1,15 +1,23 @@
 const request = require("supertest");
 const express = require("express");
-const apiV1Routes = require("../src/api/v1/routes");
+const { app, initializeExpressApp } = require("../src/config/expressApp");
 const errorHandler = require("../src/middleware/errorHandler");
 const axios = require("axios");
 const FormData = require("form-data");
+const config = require("../src/config/appConfig");
 
 jest.mock("axios");
 
-const app = express();
-app.use("/api/v1", apiV1Routes);
-app.use(errorHandler);
+let server;
+beforeAll(async (done) => {
+  await initializeExpressApp();
+  server = require("http").createServer(app);
+  server.listen(done);
+});
+
+afterAll((done) => {
+  server.close(done);
+});
 
 describe("API Gateway Routes", () => {
   afterEach(() => {
@@ -20,7 +28,7 @@ describe("API Gateway Routes", () => {
     const mockResponse = { data: { result: "detection successful" } };
     axios.post.mockResolvedValue(mockResponse);
 
-    const response = await request(app)
+    const response = await request(server)
       .post("/api/v1/detect")
       .attach("image", Buffer.from("fake-image-data"), "test.jpg");
 
@@ -29,7 +37,7 @@ describe("API Gateway Routes", () => {
 
     expect(axios.post).toHaveBeenCalledTimes(1);
     const axiosCall = axios.post.mock.calls[0];
-    expect(axiosCall[0]).toBe(process.env.DETECTOR_URL);
+    expect(axiosCall[0]).toBe(config.serviceUrls.yoloDetector);
     expect(axiosCall[1]).toBeInstanceOf(FormData);
     expect(axiosCall[2]).toHaveProperty("headers");
   });
@@ -38,7 +46,7 @@ describe("API Gateway Routes", () => {
     const mockResponse = { data: { result: "scan successful" } };
     axios.post.mockResolvedValue(mockResponse);
 
-    const response = await request(app)
+    const response = await request(server)
       .post("/api/v1/scan")
       .attach("image", Buffer.from("fake-image-data"), "test.png");
 
@@ -47,7 +55,7 @@ describe("API Gateway Routes", () => {
 
     expect(axios.post).toHaveBeenCalledTimes(1);
     const axiosCall = axios.post.mock.calls[0];
-    expect(axiosCall[0]).toBe(process.env.SCANNER_URL);
+    expect(axiosCall[0]).toBe(config.serviceUrls.ocr);
     expect(axiosCall[1]).toBeInstanceOf(FormData);
     expect(axiosCall[2]).toHaveProperty("headers");
   });
@@ -56,7 +64,7 @@ describe("API Gateway Routes", () => {
     const mockResponse = { data: { result: "transcription successful" } };
     axios.post.mockResolvedValue(mockResponse);
 
-    const response = await request(app)
+    const response = await request(server)
       .post("/api/v1/transcribe")
       .attach("audio", Buffer.from("fake-audio-data"), "test.mp3");
 
@@ -65,15 +73,15 @@ describe("API Gateway Routes", () => {
 
     expect(axios.post).toHaveBeenCalledTimes(1);
     const axiosCall = axios.post.mock.calls[0];
-    expect(axiosCall[0]).toBe(process.env.TRANSCRIBER_URL);
+    expect(axiosCall[0]).toBe(config.serviceUrls.voiceTranscriber);
     expect(axiosCall[1]).toBeInstanceOf(FormData);
     expect(axiosCall[2]).toHaveProperty("headers");
   });
 
   test("POST /api/v1/detect without a file should return 400", async () => {
-    const response = await request(app).post("/api/v1/detect");
+    const response = await request(server).post("/api/v1/detect");
 
     expect(response.status).toBe(400);
-    expect(response.body.error).toBe("File tidak ditemukan dalam permintaan.");
+    expect(response.body.message).toBe("File image tidak ditemukan.");
   });
 });
