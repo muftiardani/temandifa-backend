@@ -29,6 +29,7 @@
     "expo-server-sdk": "^4.0.0",
     "express": "^5.1.0",
     "express-async-handler": "^1.2.0",
+    "express-mongo-sanitize": "^2.2.0",
     "express-prom-bundle": "^8.0.0",
     "express-rate-limit": "^8.1.0",
     "express-request-id": "^2.0.1",

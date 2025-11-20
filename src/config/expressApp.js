@@ -9,6 +9,9 @@ const { ipKeyGenerator } = require("express-rate-limit");
 const { RedisStore } = require("rate-limit-redis");
 const { redisClient } = require("./redis");
 
+const mongoSanitize = require("express-mongo-sanitize");
+const mongoose = require("mongoose");
+
 const config = require("./appConfig");
 const { logger, addUserToReq } = require("./logger");
 const errorHandler = require("../middleware/errorHandler");
@@ -27,6 +30,16 @@ const setupMiddleware = () => {
   app.use(helmet());
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+
+  app.use(
+    mongoSanitize({
+      onSanitize: ({ req, key }) => {
+        logger.warn(`Potential NoSQL Injection detected in ${key}`, {
+          ip: req.ip,
+        });
+      },
+    })
+  );
 
   app.use(addRequestId());
 
@@ -107,7 +120,22 @@ const setupRoutesAndErrorHandling = () => {
     logger.error("Failed to generate OpenAPI/Swagger specs from Zod:", error);
   }
 
-  app.get("/health", (req, res) => res.status(200).send("OK"));
+  app.get("/health", async (req, res) => {
+    const mongoStatus = mongoose.connection.readyState === 1 ? "UP" : "DOWN";
+    const redisStatus = redisClient.isOpen ? "UP" : "DOWN";
+
+    const isHealthy = mongoStatus === "UP" && redisStatus === "UP";
+    const statusCode = isHealthy ? 200 : 503;
+
+    res.status(statusCode).json({
+      status: isHealthy ? "UP" : "DOWN",
+      timestamp: new Date(),
+      services: {
+        database: mongoStatus,
+        cache: redisStatus,
+      },
+    });
+  });
 
   app.use(errorHandler);
 };

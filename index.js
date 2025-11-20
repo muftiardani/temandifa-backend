@@ -15,6 +15,7 @@ const { logger, errorWithContext } = require("./src/config/logger");
 const { startMetricsServer } = require("./src/config/metrics");
 const { initializeSocket } = require("./src/socket/socketHandler");
 const { initializeExpressApp, server } = require("./src/config/expressApp");
+const appEmitter = require("./src/events/appEmitter");
 
 const PORT = config.port;
 
@@ -46,7 +47,10 @@ const startServer = async () => {
     await connectRedis();
 
     await Promise.all([pubClient.connect(), subClient.connect()]);
-    logger.info("Database, Redis, and Redis Pub/Sub connected.");
+
+    await appEmitter.initialize();
+
+    logger.info("Database, Redis (Cache, Adapter, EventBus) connected.");
 
     initializeSocket(io);
     logger.info("Socket.IO initialized with Redis Adapter.");
@@ -68,16 +72,15 @@ const startServer = async () => {
           logger.info("MongoDB connection closed.");
 
           if (redisClient && redisClient.isOpen) {
-            await Promise.all([
-              redisClient.quit(),
-              pubClient.quit(),
-              subClient.quit(),
-            ]);
-            logger.info("All Redis connections closed.");
-          } else {
-            logger.info("Redis connection already closed or not initialized.");
+            await redisClient.quit();
           }
-          logger.info("Graceful shutdown complete.");
+
+          if (pubClient.isOpen) await pubClient.quit();
+          if (subClient.isOpen) await subClient.quit();
+
+          await appEmitter.close();
+
+          logger.info("All connections closed.");
           process.exit(0);
         } catch (err) {
           errorWithContext(
