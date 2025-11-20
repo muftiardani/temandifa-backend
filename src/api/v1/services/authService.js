@@ -248,7 +248,8 @@ const loginOrRegisterWithGoogle = async (googleAccessToken, req) => {
 };
 
 /**
- * Memperbarui Access Token menggunakan Refresh Token.
+ * Memperbarui Access Token menggunakan Refresh Token dengan ROTATION.
+ * Refresh token lama akan hangus dan diganti dengan yang baru.
  */
 const refreshAccessToken = async (refreshTokenInput, req) => {
   let decoded;
@@ -296,14 +297,14 @@ const refreshAccessToken = async (refreshTokenInput, req) => {
 
   if (!isMatch) {
     logWithContext(
-      "warn",
-      `Refresh token hash mismatch for session ${decoded.sid}`,
+      "error",
+      `Refresh Token Reuse Detected for user ${decoded.id}! Session ${decoded.sid} revoked.`,
       req
     );
     await validSession.deleteOne();
     await redisClient.del(getSessionCacheKey(decoded.sid));
     const error = new Error(
-      "Sesi tidak valid atau sudah logout, harap login kembali"
+      "Token telah digunakan sebelumnya. Silakan login ulang demi keamanan."
     );
     error.statusCode = 403;
     throw error;
@@ -322,22 +323,11 @@ const refreshAccessToken = async (refreshTokenInput, req) => {
     throw error;
   }
 
-  Session.updateOne(
-    { _id: validSession._id },
-    { $set: { lastActiveAt: Date.now() } }
-  )
-    .exec()
-    .catch((err) => {
-      errorWithContext("Failed to update session lastActiveAt", err, req, {
-        sessionId: validSession._id,
-      });
-    });
-
   const user = await User.findById(decoded.id).select("email").lean();
   if (!user) {
     logWithContext(
       "error",
-      `User ${decoded.id} not found during token refresh despite valid token. Deleting session ${validSession._id}`,
+      `User ${decoded.id} not found during token refresh. Deleting session.`,
       req
     );
     await validSession.deleteOne();
@@ -347,14 +337,52 @@ const refreshAccessToken = async (refreshTokenInput, req) => {
     throw error;
   }
 
-  const accessToken = jwt.sign(
+  const newRefreshToken = jwt.sign(
+    { id: user._id, sid: validSession._id },
+    config.jwt.refreshSecret,
+    { expiresIn: config.jwt.refreshExpiresIn }
+  );
+
+  const salt = await bcrypt.genSalt(10);
+  const newRefreshTokenHash = await bcrypt.hash(newRefreshToken, salt);
+
+  validSession.refreshTokenHash = newRefreshTokenHash;
+  validSession.lastActiveAt = Date.now();
+  validSession.expiresAt = new Date(Date.now() + config.jwt.refreshExpiresInMs);
+
+  try {
+    await validSession.save();
+  } catch (saveErr) {
+    errorWithContext(
+      "Failed to update session during token rotation",
+      saveErr,
+      req
+    );
+    throw new Error("Gagal memperbarui sesi.");
+  }
+
+  try {
+    await redisClient.expire(
+      getSessionCacheKey(validSession._id.toString()),
+      Math.floor(config.jwt.refreshExpiresInMs / 1000)
+    );
+  } catch (cacheError) {
+    errorWithContext("Redis expire error during rotation", cacheError, req);
+  }
+
+  const newAccessToken = jwt.sign(
     { id: user._id, email: user.email, sid: decoded.sid },
     config.jwt.secret,
     { expiresIn: config.jwt.expiresIn }
   );
 
-  logWithContext("info", `Access token refreshed for user ${decoded.id}`, req);
-  return { accessToken };
+  logWithContext(
+    "info",
+    `Token rotated successfully for user ${user._id}`,
+    req
+  );
+
+  return { accessToken: newAccessToken, refreshToken: newRefreshToken };
 };
 
 /**

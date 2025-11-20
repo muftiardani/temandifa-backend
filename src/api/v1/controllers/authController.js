@@ -79,13 +79,19 @@ exports.refreshToken = asyncHandler(async (req, res, next) => {
     throw new Error("Refresh token is required");
   }
 
-  const { accessToken } = await authService.refreshAccessToken(
-    refreshToken,
+  const { accessToken, refreshToken: newRefreshToken } =
+    await authService.refreshAccessToken(refreshToken, req);
+
+  logWithContext(
+    "info",
+    "Access token refreshed and rotated successfully",
     req
   );
 
-  logWithContext("info", "Access token refreshed successfully", req);
-  res.json({ accessToken });
+  res.json({
+    accessToken,
+    refreshToken: newRefreshToken,
+  });
 });
 
 exports.logoutUser = asyncHandler(async (req, res, next) => {

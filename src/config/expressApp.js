@@ -6,6 +6,8 @@ const morgan = require("morgan");
 const swaggerUi = require("swagger-ui-express");
 const rateLimit = require("express-rate-limit");
 const { ipKeyGenerator } = require("express-rate-limit");
+const { RedisStore } = require("rate-limit-redis");
+const { redisClient } = require("./redis");
 
 const config = require("./appConfig");
 const { logger, addUserToReq } = require("./logger");
@@ -41,12 +43,16 @@ const setupMiddleware = () => {
 const setupRateLimiting = () => {
   const customKeyGenerator = (req) => ipKeyGenerator(req);
 
+  const redisStore = new RedisStore({
+    sendCommand: (...args) => redisClient.sendCommand(args),
+  });
+
   const generalLimiter = rateLimit({
     windowMs: config.rateLimit.generalWindowMs,
     max: config.rateLimit.generalMax,
+    store: redisStore,
     message: {
-      message:
-        "Terlalu banyak request dari IP ini, silakan coba lagi setelah 15 menit",
+      message: "Terlalu banyak request dari IP ini, silakan coba lagi nanti.",
     },
     standardHeaders: true,
     legacyHeaders: false,
@@ -64,9 +70,9 @@ const setupRateLimiting = () => {
   const authLimiter = rateLimit({
     windowMs: config.rateLimit.authWindowMs,
     max: config.rateLimit.authMax,
+    store: redisStore,
     message: {
-      message:
-        "Terlalu banyak percobaan otentikasi dari IP ini, silakan coba lagi setelah 15 menit",
+      message: "Terlalu banyak percobaan otentikasi, silakan coba lagi nanti.",
     },
     standardHeaders: true,
     legacyHeaders: false,
