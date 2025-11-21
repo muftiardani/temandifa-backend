@@ -61,3 +61,12 @@ logs
 *.sln
 *.sw?
 Thumbs.db
+
+# Folder Upload Sementara
+# Mengabaikan folder yang digunakan untuk unggahan sementara
+temp_uploads/
+uploads/
+temp_audio_uploads/
+mongo-data/
+redis-data/
+coverage/

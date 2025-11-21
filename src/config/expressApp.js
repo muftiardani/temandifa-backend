@@ -8,18 +8,14 @@ const rateLimit = require("express-rate-limit");
 const { ipKeyGenerator } = require("express-rate-limit");
 const { RedisStore } = require("rate-limit-redis");
 const { redisClient } = require("./redis");
-
 const mongoSanitize = require("express-mongo-sanitize");
 const mongoose = require("mongoose");
-
 const config = require("./appConfig");
 const { logger, addUserToReq } = require("./logger");
 const errorHandler = require("../middleware/errorHandler");
 const apiV1Routes = require("../api/v1/routes");
-
 const { getOpenApiDocumentation } = require("./swaggerConfig");
-
-const addRequestId = require("express-request-id");
+const { v4: uuidv4 } = require("uuid");
 
 const app = express();
 const server = http.createServer(app);
@@ -41,7 +37,11 @@ const setupMiddleware = () => {
     })
   );
 
-  app.use(addRequestId());
+  app.use((req, res, next) => {
+    req.id = uuidv4();
+    res.setHeader("X-Request-ID", req.id);
+    next();
+  });
 
   app.use(
     morgan(config.isProduction ? "combined" : "dev", {

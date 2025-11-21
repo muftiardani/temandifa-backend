@@ -40,17 +40,16 @@ const startServer = async () => {
       };
     }
 
-    await initializeExpressApp();
-    logger.info("Express app initialized.");
-
     await connectDB();
     await connectRedis();
 
     await Promise.all([pubClient.connect(), subClient.connect()]);
-
     await appEmitter.initialize();
 
     logger.info("Database, Redis (Cache, Adapter, EventBus) connected.");
+
+    await initializeExpressApp();
+    logger.info("Express app initialized.");
 
     initializeSocket(io);
     logger.info("Socket.IO initialized with Redis Adapter.");

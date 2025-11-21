@@ -25,4 +25,4 @@ metrics_generator:
       source: tempo
 
 overrides:
-  metrics_generator_enabled: true
+  metrics_generator_processors: [service-graphs, span-metrics]

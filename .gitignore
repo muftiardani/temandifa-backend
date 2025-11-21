@@ -43,6 +43,9 @@ venv/
 
 # Folder Upload Sementara
 # Mengabaikan folder yang digunakan untuk unggahan sementara
-uploads/
 temp_uploads/
+uploads/
 temp_audio_uploads/
+mongo-data/
+redis-data/
+coverage/
